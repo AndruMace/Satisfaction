@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
 import { bounceRaceModule } from './games/bounce-race/module'
 import { bubbleWarModule } from './games/bubble-war/module'
+import { cascadeTycoonModule } from './games/cascade-tycoon/module'
 import { dominoHeistModule } from './games/domino-heist/module'
-import { greedyGrabModule } from './games/greedy-grab/module'
+import { driftTunnelModule } from './games/drift-tunnel/module'
 import { laserRouletteModule } from './games/laser-roulette/module'
+import { perfectClearModule } from './games/perfect-clear/module'
+import { squishFitModule } from './games/squish-fit/module'
 import type { SpectatorGameModule } from './shared/module'
 import { GameShell } from './shell/GameShell'
 import './App.css'
@@ -13,7 +16,10 @@ const GAME_MODULES: SpectatorGameModule[] = [
   dominoHeistModule,
   laserRouletteModule,
   bubbleWarModule,
-  greedyGrabModule,
+  cascadeTycoonModule,
+  perfectClearModule,
+  squishFitModule,
+  driftTunnelModule,
 ]
 
 function gameIdFromPath(pathname: string): string {

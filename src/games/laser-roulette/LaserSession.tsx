@@ -19,10 +19,10 @@ import type { CourseData } from './types'
 export type CourseChoice = PresetId | 'procedural'
 
 const PRESET_OPTIONS: { id: CourseChoice; label: string }[] = [
-  { id: 'sparse', label: 'Sparse' },
-  { id: 'dual', label: 'Dual' },
+  { id: 'sparse', label: 'Slow Sweep' },
+  { id: 'dual', label: 'Slow Dual' },
   { id: 'crossfire', label: 'Crossfire' },
-  { id: 'dense', label: 'Dense' },
+  { id: 'dense', label: 'Dense Blades' },
   { id: 'procedural', label: 'Procedural' },
 ]
 

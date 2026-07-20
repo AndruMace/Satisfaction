@@ -36,6 +36,7 @@ export function generateProceduralCourse(seed: number): CourseData {
   return {
     name: `Proc ${seed.toString(16).slice(0, 4)}`,
     beams,
+    hubClear: 0.2 + rnd() * 0.09,
     escalateAt: 3.2 + rnd() * 4,
     mistakeBias: 0.1 + rnd() * 0.16,
     surviveSeconds: 16 + Math.floor(rnd() * 14),

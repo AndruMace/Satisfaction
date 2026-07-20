@@ -6,18 +6,30 @@ import {
   type CourseData,
   type Dodger,
   type DodgerId,
-  DODGER_SIZE,
   HIT_HALF_WIDTH_PAD,
+  HUB_SAFE_DEFAULT,
+  HUB_SAFE_FLOOR,
   type LaserBeam,
   type LaserEvent,
   NEAR_MISS_PAD,
   type Particle,
-  RING_RADIUS,
+  RACER_RADIUS,
+  SPAWN_RADIUS,
   TRAIL_LENGTH,
+  type Vec2,
 } from './types'
 
 const TAU = Math.PI * 2
 const BEAM_COLORS = ['#ff2d95', '#00f0ff', '#ff4d6d', '#b197fc', '#ffe066', '#69db7c']
+
+/** Beams grow in so spawn isn't instantly lethal. */
+const BEAM_SPAWN_LENGTH = 0.32
+const BEAM_LETHAL_LENGTH = 0.8
+const DODGER_SPAWN_GRACE = 0.7
+const MAX_SPEED = 280
+const DASH_SPEED = 420
+const FRICTION = 2.2
+const ACCEL = 720
 
 export function normalizeAngle(a: number): number {
   let x = a % TAU
@@ -25,7 +37,7 @@ export function normalizeAngle(a: number): number {
   return x
 }
 
-/** Smallest absolute angular distance. */
+/** Smallest signed angular distance a→b. */
 export function angleDelta(a: number, b: number): number {
   let d = normalizeAngle(a) - normalizeAngle(b)
   if (d > Math.PI) d -= TAU
@@ -33,24 +45,24 @@ export function angleDelta(a: number, b: number): number {
   return d
 }
 
-export function ringPoint(angle: number): { x: number; y: number } {
-  return {
-    x: ARENA_CX + Math.cos(angle) * RING_RADIUS,
-    y: ARENA_CY + Math.sin(angle) * RING_RADIUS,
-  }
+export function dist(ax: number, ay: number, bx: number, by: number): number {
+  return Math.hypot(ax - bx, ay - by)
 }
 
-/** Beams grow in so spawn isn't instantly lethal; visual from frame 1. */
-const BEAM_SPAWN_LENGTH = 0.42
-const BEAM_LETHAL_LENGTH = 0.72
-const DODGER_SPAWN_GRACE = 0.45
+export function clampMag(x: number, y: number, max: number): Vec2 {
+  const m = Math.hypot(x, y)
+  if (m <= max || m < 1e-6) return { x, y }
+  const s = max / m
+  return { x: x * s, y: y * s }
+}
 
-export function createBeams(course: CourseData, beamCountOverride?: number): LaserBeam[] {
+export function createBeams(
+  course: CourseData,
+  beamCountOverride?: number,
+): LaserBeam[] {
   const source = course.beams
-  const count = Math.max(
-    1,
-    Math.min(6, beamCountOverride ?? source.length),
-  )
+  const count = Math.max(1, Math.min(6, beamCountOverride ?? source.length))
+  const hubClear = course.hubClear ?? HUB_SAFE_DEFAULT
   const beams: LaserBeam[] = []
   for (let i = 0; i < count; i++) {
     const template = source[i % source.length]
@@ -67,187 +79,87 @@ export function createBeams(course: CourseData, beamCountOverride?: number): Las
       halfWidth: template.halfWidth,
       length: Math.min(BEAM_SPAWN_LENGTH, targetLength),
       targetLength,
+      hubClear,
       color: BEAM_COLORS[i % BEAM_COLORS.length],
       pulse: 0.55,
+      telegraph: 0.8,
     })
   }
   return beams
 }
 
-/** Midpoints + usable width of safe arcs between beams. */
-export function safeGapSlots(
-  beams: LaserBeam[],
-): Array<{ mid: number; width: number; start: number }> {
-  if (beams.length === 0) {
-    return [{ mid: Math.PI / 2, width: TAU * 0.9, start: 0 }]
-  }
-  const sorted = [...beams].sort(
-    (a, b) => normalizeAngle(a.angle) - normalizeAngle(b.angle),
-  )
-  const slots: Array<{ mid: number; width: number; start: number }> = []
-  for (let i = 0; i < sorted.length; i++) {
-    const a = normalizeAngle(sorted[i].angle)
-    const b = normalizeAngle(sorted[(i + 1) % sorted.length].angle)
-    const span = normalizeAngle(b - a)
-    const pad =
-      sorted[i].halfWidth +
-      sorted[(i + 1) % sorted.length].halfWidth +
-      HIT_HALF_WIDTH_PAD * 2
-    const width = Math.max(0, span - pad)
-    if (width > 0.08) {
-      const start = normalizeAngle(a + pad / 2)
-      slots.push({
-        mid: normalizeAngle(a + span / 2),
-        width,
-        start,
-      })
-    }
-  }
-  if (slots.length > 0) return slots
-  return sorted.map((beam, i) => ({
-    mid: normalizeAngle(
-      beam.angle + Math.PI / Math.max(2, sorted.length) + i * 0.01,
-    ),
-    width: 0.4,
-    start: normalizeAngle(beam.angle + beam.halfWidth + HIT_HALF_WIDTH_PAD),
-  }))
-}
-
-/** Midpoints of safe arcs between beams, ordered around the circle. */
-export function safeGapHomes(beams: LaserBeam[]): number[] {
-  return safeGapSlots(beams).map((s) => s.mid)
-}
-
-/**
- * Spread `count` occupants evenly across a gap's usable arc
- * (not all jammed on the midpoint).
- */
-function slotAnglesInGap(
-  gap: { mid: number; width: number; start: number },
-  count: number,
-): number[] {
-  if (count <= 1) return [gap.mid]
-  const usable = Math.max(0.12, gap.width * 0.82)
-  const step = usable / (count + 1)
-  const angles: number[] = []
-  for (let i = 0; i < count; i++) {
-    angles.push(normalizeAngle(gap.start + step * (i + 1)))
-  }
-  return angles
-}
-
-/** Place contestants in the widest safe mid-gaps between beams. */
-export function placeSafeAngles(count: number, beams: LaserBeam[]): number[] {
-  const n = Math.max(1, count)
-  const gaps = safeGapSlots(beams)
-  if (gaps.length === 0) {
-    return Array.from({ length: n }, (_, i) => (TAU * i) / n + Math.PI / 2)
-  }
-
-  // Prefer unique gaps first; overflow spreads inside the widest gaps
-  const sorted = [...gaps].sort((a, b) => b.width - a.width)
-  const assignment: number[][] = sorted.map(() => [])
-  for (let i = 0; i < n; i++) {
-    assignment[i % sorted.length].push(i)
-  }
-
-  const slots: number[] = new Array(n)
-  for (let g = 0; g < sorted.length; g++) {
-    const occupants = assignment[g]
-    if (occupants.length === 0) continue
-    const angles = slotAnglesInGap(sorted[g], occupants.length)
-    for (let k = 0; k < occupants.length; k++) {
-      slots[occupants[k]] = angles[k]
-    }
-  }
-  return slots
-}
-
-/**
- * Assign each alive dodger a unique home in the current safe gaps so they
- * spread out instead of stacking on one midpoint.
- */
-export function assignHomes(dodgers: Dodger[], beams: LaserBeam[]): void {
-  const gaps = safeGapSlots(beams)
-  if (gaps.length === 0) return
-  const alive = [...dodgers]
-    .filter((d) => d.alive)
-    .sort((a, b) => a.id.localeCompare(b.id))
-
-  const sorted = [...gaps].sort((a, b) => b.width - a.width)
-  const assignment: Dodger[][] = sorted.map(() => [])
-  for (let i = 0; i < alive.length; i++) {
-    assignment[i % sorted.length].push(alive[i])
-  }
-
-  for (let g = 0; g < sorted.length; g++) {
-    const group = assignment[g]
-    if (group.length === 0) continue
-    const angles = slotAnglesInGap(sorted[g], group.length)
-    for (let k = 0; k < group.length; k++) {
-      group[k].homeAngle = angles[k]
-    }
-  }
-}
-
+/** Place racers in safe spawn band between hub and rim, spread by angle. */
 export function createDodgers(
   playerCount: number,
   skillScale: number,
   beams: LaserBeam[] = [],
 ): Dodger[] {
   const n = Math.max(2, Math.min(6, playerCount))
-  const angles = placeSafeAngles(n, beams)
+  const hubR = ARENA_RADIUS * (beams[0]?.hubClear ?? HUB_SAFE_DEFAULT)
+  const spawnR = Math.min(
+    SPAWN_RADIUS,
+    (hubR + ARENA_RADIUS - RACER_RADIUS) * 0.55,
+  )
+  // Prefer angles farthest from beams
+  const starts = pickSpawnAngles(n, beams)
+
   const dodgers: Dodger[] = []
   for (let i = 0; i < n; i++) {
     const profile = PLAYER_PROFILES[i]
-    const angle = angles[i] ?? (TAU * i) / n
+    const angle = starts[i] ?? (TAU * i) / n + Math.PI / 2
+    const r = spawnR + (i % 2) * 12
     dodgers.push({
       id: profile.id,
       color: profile.color,
-      angle,
-      omega: 0,
-      skill: Math.max(0.45, Math.min(1.25, skillScale * (0.9 + (i % 3) * 0.06))),
-      homeAngle: angle,
+      x: ARENA_CX + Math.cos(angle) * r,
+      y: ARENA_CY + Math.sin(angle) * r,
+      vx: 0,
+      vy: 0,
+      radius: RACER_RADIUS,
+      skill: Math.max(0.5, Math.min(1.3, skillScale * (0.9 + (i % 3) * 0.06))),
       alive: true,
       grace: DODGER_SPAWN_GRACE,
       nearMissCooldown: 0,
       stun: 0,
+      dash: 0,
+      dashCooldown: 0.4 + i * 0.05,
       trail: [],
     })
   }
   return dodgers
 }
 
-function isAngleDangerous(
-  angle: number,
-  beams: LaserBeam[],
-  ignoreLength = false,
-): boolean {
-  for (const beam of beams) {
-    if (!ignoreLength && beam.length < BEAM_LETHAL_LENGTH) continue
-    const half = beam.halfWidth + HIT_HALF_WIDTH_PAD
-    if (Math.abs(angleDelta(angle, beam.angle)) <= half) return true
+function pickSpawnAngles(count: number, beams: LaserBeam[]): number[] {
+  if (beams.length === 0) {
+    return Array.from({ length: count }, (_, i) => (TAU * i) / count)
   }
-  return false
+  const samples = 48
+  const scored: Array<{ a: number; score: number }> = []
+  for (let i = 0; i < samples; i++) {
+    const a = (TAU * i) / samples
+    let minGap = Infinity
+    for (const beam of beams) {
+      const d = Math.abs(angleDelta(a, beam.angle)) - beam.halfWidth
+      if (d < minGap) minGap = d
+    }
+    scored.push({ a, score: minGap })
+  }
+  scored.sort((a, b) => b.score - a.score)
+
+  const picks: number[] = []
+  for (const s of scored) {
+    if (picks.length >= count) break
+    if (picks.every((p) => Math.abs(angleDelta(p, s.a)) > 0.32)) {
+      picks.push(s.a)
+    }
+  }
+  while (picks.length < count) {
+    picks.push((TAU * picks.length) / count)
+  }
+  return picks
 }
 
-/** True if the shortest arc from→to crosses a beam wedge. */
-function pathCrossesBeam(
-  from: number,
-  to: number,
-  beams: LaserBeam[],
-): boolean {
-  const travel = -angleDelta(from, to)
-  if (Math.abs(travel) < 0.02) return isAngleDangerous(from, beams, true)
-  const steps = Math.max(6, Math.ceil(Math.abs(travel) / 0.08))
-  for (let i = 1; i <= steps; i++) {
-    const a = normalizeAngle(from + (travel * i) / steps)
-    if (isAngleDangerous(a, beams, true)) return true
-  }
-  return false
-}
-
-/** Snapshot beams advanced by `ahead` seconds (for predictive dodge). */
+/** Snapshot beams advanced by `ahead` seconds. */
 export function projectBeams(
   beams: LaserBeam[],
   ahead: number,
@@ -258,87 +170,86 @@ export function projectBeams(
     angle: normalizeAngle(beam.angle + beam.angularSpeed * speedScale * ahead),
     length: Math.min(
       beam.targetLength,
-      beam.length + Math.max(0, ahead) * 0.55,
+      beam.length + Math.max(0, ahead) * 0.5,
     ),
+    telegraph: Math.max(0, beam.telegraph - ahead),
   }))
 }
 
+export function currentHubClear(beams: LaserBeam[]): number {
+  if (beams.length === 0) return HUB_SAFE_DEFAULT
+  return Math.min(...beams.map((b) => b.hubClear))
+}
+
 /**
- * Pick a reachable safe angle biased toward this dodger's home slot.
- * Avoids beam-crossing shortcuts and stacking on peers.
+ * Lethal if outside hub, within beam length, and inside angular wedge.
+ * Growing beams below lethal length are not deadly.
  */
-export function findSafeTarget(
-  fromAngle: number,
+export function beamDangerAt(
+  x: number,
+  y: number,
   beams: LaserBeam[],
-  homeAngle: number,
-  avoidAngles: number[] = [],
-  samples = 72,
-): number {
-  let best = homeAngle
-  let bestScore = -Infinity
+  opts?: { ignoreLength?: boolean; nearMiss?: boolean },
+): { lethal: boolean; near: boolean; clearance: number } {
+  const dx = x - ARENA_CX
+  const dy = y - ARENA_CY
+  const r = Math.hypot(dx, dy)
+  const ang = Math.atan2(dy, dx)
+  let lethal = false
+  let near = false
+  let worst = Infinity
 
-  for (let i = 0; i < samples; i++) {
-    const candidate = (TAU * i) / samples
-    if (isAngleDangerous(candidate, beams, true)) continue
-
-    let minGap = Infinity
-    for (const beam of beams) {
-      const d = Math.abs(angleDelta(candidate, beam.angle)) - beam.halfWidth
-      if (d < minGap) minGap = d
-    }
-
-    const travel = Math.abs(angleDelta(fromAngle, candidate))
-    const homeDist = Math.abs(angleDelta(candidate, homeAngle))
-    const crosses = pathCrossesBeam(fromAngle, candidate, beams)
-
-    let crowd = 0
-    for (const other of avoidAngles) {
-      const sep = Math.abs(angleDelta(candidate, other))
-      if (sep < 0.28) crowd += (0.28 - sep) * 4.5
-    }
-
-    // Prefer deep pockets near home that we can reach without crossing beams
-    const score =
-      minGap * 3.2 -
-      travel * 1.35 -
-      homeDist * 1.6 -
-      crowd -
-      (crosses ? 12 : 0)
-
-    if (score > bestScore) {
-      bestScore = score
-      best = candidate
-    }
-  }
-
-  if (bestScore === -Infinity || pathCrossesBeam(fromAngle, best, beams)) {
-    // Fall back: nearest gap mid we can reach, else home
-    const homes = safeGapHomes(beams)
-    let fallback = homeAngle
-    let fallbackTravel = Infinity
-    for (const mid of homes) {
-      if (pathCrossesBeam(fromAngle, mid, beams)) continue
-      const t = Math.abs(angleDelta(fromAngle, mid))
-      if (t < fallbackTravel) {
-        fallbackTravel = t
-        fallback = mid
-      }
-    }
-    return fallback
-  }
-
-  return best
-}
-
-function clearanceAt(angle: number, beams: LaserBeam[]): number {
-  let minGap = Infinity
   for (const beam of beams) {
-    const d = Math.abs(angleDelta(angle, beam.angle)) - beam.halfWidth
-    if (d < minGap) minGap = d
+    const hubR = ARENA_RADIUS * beam.hubClear
+    if (r < hubR) continue
+    if (!opts?.ignoreLength && beam.length < BEAM_LETHAL_LENGTH) continue
+    if (r > ARENA_RADIUS * beam.length + 6) continue
+
+    const half = beam.halfWidth + HIT_HALF_WIDTH_PAD
+    const d = Math.abs(angleDelta(ang, beam.angle))
+    const clearance = d - half
+    if (clearance < worst) worst = clearance
+    if (d <= half) lethal = true
+    else if (opts?.nearMiss !== false && d <= half + NEAR_MISS_PAD) near = true
   }
-  return Number.isFinite(minGap) ? minGap : Math.PI
+
+  return {
+    lethal,
+    near,
+    clearance: Number.isFinite(worst) ? worst : Math.PI,
+  }
 }
 
+function threatScore(x: number, y: number, beams: LaserBeam[]): number {
+  const d = beamDangerAt(x, y, beams, { ignoreLength: true })
+  if (d.lethal) return 1
+  // Broader awareness cone so racers turn before the blade is on them
+  return Math.max(0, 1 - d.clearance / 0.65)
+}
+
+export function stepBeams(
+  beams: LaserBeam[],
+  dt: number,
+  speedScale: number,
+): void {
+  for (const beam of beams) {
+    beam.angle = normalizeAngle(
+      beam.angle + beam.angularSpeed * speedScale * dt,
+    )
+    // Slow creep keeps single-blade arenas contestable over time.
+    beam.angularSpeed *= 1 + dt * 0.012
+    if (beam.length < beam.targetLength) {
+      // Slightly longer telegraph before lethal, then firm growth.
+      const grow =
+        beam.length < BEAM_LETHAL_LENGTH * 0.92 ? dt * 0.16 : dt * 0.35
+      beam.length = Math.min(beam.targetLength, beam.length + grow)
+    }
+    if (beam.pulse > 0) beam.pulse = Math.max(0, beam.pulse - dt * 2.5)
+    if (beam.telegraph > 0) beam.telegraph = Math.max(0, beam.telegraph - dt)
+  }
+}
+
+/** Steering AI + integrate desire into acceleration. */
 export function stepAi(
   dodger: Dodger,
   beams: LaserBeam[],
@@ -352,111 +263,389 @@ export function stepAi(
   if (!dodger.alive) return
   if (dodger.grace > 0) dodger.grace = Math.max(0, dodger.grace - dt)
   if (dodger.stun > 0) dodger.stun = Math.max(0, dodger.stun - dt)
+  if (dodger.dash > 0) dodger.dash = Math.max(0, dodger.dash - dt)
+  if (dodger.dashCooldown > 0) {
+    dodger.dashCooldown = Math.max(0, dodger.dashCooldown - dt)
+  }
 
-  const lookAhead = 0.32 + aggression * 0.2
-  const futureBeams = projectBeams(beams, lookAhead, speedScale)
-  const nearFuture = projectBeams(beams, 0.16, speedScale)
-  const urgent =
-    isAngleDangerous(dodger.angle, nearFuture) ||
-    clearanceAt(dodger.angle, futureBeams) < 0.14
+  const lookAhead = 0.45 + aggression * 0.25
+  const future = projectBeams(beams, lookAhead, speedScale)
+  const nearFuture = projectBeams(beams, 0.2, speedScale)
 
-  const maxOmega = (2.6 + aggression * 2.2) * dodger.skill * (urgent ? 1.35 : 1)
-  let accel = (12 + aggression * 9) * dodger.skill * (urgent ? 1.45 : 1)
-  if (dodger.stun > 0) accel *= 0.25
+  const here = threatScore(dodger.x, dodger.y, nearFuture)
+  const ahead = threatScore(dodger.x, dodger.y, future)
+  const nowDanger = beamDangerAt(dodger.x, dodger.y, nearFuture)
+  const threat = Math.max(here, ahead * 0.85)
+  // React early — don't wait until clearance is already tiny
+  const urgent = threat > 0.28 || nowDanger.clearance < 0.22
+  const panicking = threat > 0.55 || nowDanger.clearance < 0.1
 
-  const avoidAngles = peers
-    .filter((p) => p.alive && p.id !== dodger.id)
-    .map((p) => p.angle)
+  const alivePeers = peers.filter((p) => p.alive && p.id !== dodger.id)
+  const aliveCount = alivePeers.length + 1
 
-  // When urgent, prefer nearest safe pocket over a compromised home slot
-  const preferred = urgent ? dodger.angle : dodger.homeAngle
-  let target = findSafeTarget(
-    dodger.angle,
-    futureBeams,
-    preferred,
-    avoidAngles,
-  )
+  let ax = 0
+  let ay = 0
 
-  // Soft separation — push away from piled peers (keep result safe)
-  for (const peer of peers) {
-    if (!peer.alive || peer.id === dodger.id) continue
-    const sep = angleDelta(dodger.angle, peer.angle)
-    const abs = Math.abs(sep)
-    if (abs > 0.001 && abs < 0.26) {
-      const pushed = normalizeAngle(
-        target + Math.sign(sep) * (0.26 - abs) * 1.8,
-      )
-      if (
-        !isAngleDangerous(pushed, futureBeams, true) &&
-        !pathCrossesBeam(dodger.angle, pushed, futureBeams)
-      ) {
-        target = pushed
+  // --- Primary: sprint away from beams (dominates when threatened)
+  const flee = fleeFromBeams(dodger.x, dodger.y, future, nearFuture)
+  const fleeW = panicking ? 3.2 : urgent ? 2.4 : 1.15
+  ax += flee.x * fleeW
+  ay += flee.y * fleeW
+
+  // Hub only as last-ditch escape when about to eat a wedge
+  const toHubX = ARENA_CX - dodger.x
+  const toHubY = ARENA_CY - dodger.y
+  const hubDist = Math.hypot(toHubX, toHubY)
+  if (panicking && nowDanger.clearance < 0.08 && hubDist > 1) {
+    ax += (toHubX / hubDist) * 1.6
+    ay += (toHubY / hubDist) * 1.6
+  }
+
+  // Strong personal space — packs are boring
+  for (const peer of alivePeers) {
+    const dx = dodger.x - peer.x
+    const dy = dodger.y - peer.y
+    const d = Math.hypot(dx, dy)
+    const soft = dodger.radius + peer.radius + 42
+    if (d > 0.001 && d < soft) {
+      const push = ((soft - d) / soft) * (urgent ? 0.9 : 1.35)
+      ax += (dx / d) * push
+      ay += (dy / d) * push
+    }
+  }
+
+  // Hunt only when clearly safe — never when it would form a blob
+  const canHunt = !urgent && threat < 0.18 && aliveCount <= 4
+  if (canHunt && alivePeers.length > 0) {
+    let nearest: Dodger | null = null
+    let nearestD = Infinity
+    for (const peer of alivePeers) {
+      const d = dist(dodger.x, dodger.y, peer.x, peer.y)
+      if (d < nearestD) {
+        nearestD = d
+        nearest = peer
       }
     }
-  }
-
-  // When safe, patrol gently around home instead of freezing on the mid-gap
-  const gap = clearanceAt(dodger.angle, futureBeams)
-  if (!urgent && gap > 0.22) {
-    const patrol =
-      Math.sin(dodger.angle * 2.7 + dodger.homeAngle * 5 + pressure * 3) * 0.16
-    const patrolTarget = normalizeAngle(dodger.homeAngle + patrol)
-    if (!pathCrossesBeam(dodger.angle, patrolTarget, futureBeams)) {
-      target = patrolTarget
-    } else if (!pathCrossesBeam(dodger.angle, dodger.homeAngle, futureBeams)) {
-      target = dodger.homeAngle
+    const crowded = alivePeers.filter(
+      (p) => dist(dodger.x, dodger.y, p.x, p.y) < 70,
+    ).length
+    if (nearest && crowded <= 1) {
+      const huntW =
+        aggression *
+        (aliveCount <= 2 ? 1.1 : aliveCount <= 3 ? 0.75 : 0.4)
+      const outwardX = nearest.x - ARENA_CX
+      const outwardY = nearest.y - ARENA_CY
+      const om = Math.hypot(outwardX, outwardY) || 1
+      const aimX = nearest.x + (outwardX / om) * 40
+      const aimY = nearest.y + (outwardY / om) * 40
+      const dx = aimX - dodger.x
+      const dy = aimY - dodger.y
+      const dm = Math.hypot(dx, dy) || 1
+      ax += (dx / dm) * huntW
+      ay += (dy / dm) * huntW
     }
   }
 
-  // Mistakes: brief stun or small jitter — never aim into a beam
+  // Keep moving when safe — patrol open arcs, not the hub
+  if (!urgent) {
+    const t = performance.now() * 0.001 + dodger.skill * 12
+    ax += Math.sin(t * 2.1 + dodger.x * 0.015) * 0.7
+    ay += Math.cos(t * 1.6 + dodger.y * 0.015) * 0.7
+    // Prefer ring-tangent cruising so they look fast between threats
+    const ang = Math.atan2(dodger.y - ARENA_CY, dodger.x - ARENA_CX)
+    const cruise = ang + Math.PI / 2 * (dodger.skill > 1 ? 1 : -1)
+    ax += Math.cos(cruise) * 0.85
+    ay += Math.sin(cruise) * 0.85
+  }
+
+  // Steer toward a safer sample (stronger when threatened)
+  const sample = sampleSaferPoint(dodger, future, urgent || panicking, alivePeers)
+  if (sample) {
+    const dx = sample.x - dodger.x
+    const dy = sample.y - dodger.y
+    const dm = Math.hypot(dx, dy) || 1
+    const w = panicking ? 2.0 : urgent ? 1.5 : 0.55
+    ax += (dx / dm) * w
+    ay += (dy / dm) * w
+  }
+
+  // Mistakes rarer under threat so they actually dodge
   const mistakeChance =
-    mistakeBias * 0.55 + pressure * 0.12 * (1.1 - dodger.skill)
-  if (Math.random() < mistakeChance * dt * 1.4) {
-    if (Math.random() < 0.5) {
-      dodger.stun = 0.12 + Math.random() * 0.18
+    mistakeBias * (urgent ? 0.12 : 0.35) +
+    pressure * 0.06 * (1.15 - dodger.skill)
+  if (Math.random() < mistakeChance * dt) {
+    if (Math.random() < 0.4) {
+      dodger.stun = 0.05 + Math.random() * 0.08
     } else {
-      const nudge = (Math.random() - 0.5) * 0.28
-      const nudged = normalizeAngle(target + nudge)
-      if (
-        !isAngleDangerous(nudged, futureBeams, true) &&
-        !pathCrossesBeam(dodger.angle, nudged, futureBeams)
-      ) {
-        target = nudged
-      }
+      ax += (Math.random() - 0.5) * 1.4
+      ay += (Math.random() - 0.5) * 1.4
     }
   }
 
-  const delta = angleDelta(dodger.angle, target)
-  const gain = urgent ? 7.0 : 4.6
-  let desiredOmega = Math.max(-maxOmega, Math.min(maxOmega, -delta * gain))
-
-  // If shortest path crosses a beam, flee the long way around
+  // Dash out of impending hits — prefer tangential flee
   if (
-    pathCrossesBeam(dodger.angle, target, futureBeams) &&
-    Math.abs(delta) > 0.05
+    (urgent || panicking) &&
+    dodger.dashCooldown <= 0 &&
+    dodger.stun <= 0 &&
+    (threat > 0.45 || nowDanger.clearance < 0.14)
   ) {
-    desiredOmega = Math.sign(delta) * maxOmega * 0.95
+    const landing = sampleSaferPoint(dodger, future, true, alivePeers, 16)
+    if (landing) {
+      const dx = landing.x - dodger.x
+      const dy = landing.y - dodger.y
+      const dm = Math.hypot(dx, dy) || 1
+      let dirX = dx / dm
+      let dirY = dy / dm
+      if (Math.hypot(flee.x, flee.y) > 0.2) {
+        dirX = dirX * 0.35 + flee.x * 0.65
+        dirY = dirY * 0.35 + flee.y * 0.65
+        const nm = Math.hypot(dirX, dirY) || 1
+        dirX /= nm
+        dirY /= nm
+      }
+      dodger.vx = dirX * DASH_SPEED
+      dodger.vy = dirY * DASH_SPEED
+      dodger.dash = 0.14
+      dodger.dashCooldown = 0.95 + Math.random() * 0.35
+      dodger.grace = Math.max(dodger.grace, 0.1)
+    }
   }
 
-  const diff = desiredOmega - dodger.omega
-  dodger.omega += Math.max(-accel * dt, Math.min(accel * dt, diff))
-  dodger.angle = normalizeAngle(dodger.angle + dodger.omega * dt)
+  // Don't normalize away urgency — let flee overwhelm other terms
+  const desireCap = panicking ? 2.4 : urgent ? 1.8 : 1.15
+  const desire = clampMag(ax, ay, desireCap)
+  let accel =
+    (ACCEL + aggression * 260) *
+    dodger.skill *
+    (panicking ? 1.55 : urgent ? 1.35 : 1)
+  if (dodger.stun > 0) accel *= 0.35
+  if (dodger.dash > 0) accel *= 1.25
 
-  if (Math.abs(dodger.omega) > maxOmega) {
-    dodger.omega = Math.sign(dodger.omega) * maxOmega
-  }
+  dodger.vx += desire.x * accel * dt
+  dodger.vy += desire.y * accel * dt
 
-  dodger.trail.push(dodger.angle)
+  const damp = Math.exp(-FRICTION * dt)
+  dodger.vx *= damp
+  dodger.vy *= damp
+
+  const maxSp =
+    dodger.dash > 0
+      ? DASH_SPEED
+      : MAX_SPEED * (0.88 + dodger.skill * 0.28) * (urgent ? 1.08 : 1)
+  const capped = clampMag(dodger.vx, dodger.vy, maxSp)
+  dodger.vx = capped.x
+  dodger.vy = capped.y
+
+  dodger.x += dodger.vx * dt
+  dodger.y += dodger.vy * dt
+  constrainToArena(dodger)
+
+  dodger.trail.push({ x: dodger.x, y: dodger.y })
   if (dodger.trail.length > TRAIL_LENGTH) dodger.trail.shift()
 }
 
-export function stepBeams(beams: LaserBeam[], dt: number, speedScale: number): void {
-  for (const beam of beams) {
-    beam.angle = normalizeAngle(beam.angle + beam.angularSpeed * speedScale * dt)
-    if (beam.length < beam.targetLength) {
-      beam.length = Math.min(beam.targetLength, beam.length + dt * 0.55)
+/**
+ * Flee along the safer tangent away from approaching beams.
+ * Hub cut only when already deep inside the lethal wedge.
+ */
+function fleeFromBeams(
+  x: number,
+  y: number,
+  future: LaserBeam[],
+  near: LaserBeam[],
+): Vec2 {
+  const dx = x - ARENA_CX
+  const dy = y - ARENA_CY
+  const r = Math.hypot(dx, dy) || 1
+  const ang = Math.atan2(dy, dx)
+  let fx = 0
+  let fy = 0
+
+  const beams = future.length ? future : near
+  for (let i = 0; i < beams.length; i++) {
+    const beam = beams[i]
+    const nearBeam = near[i] ?? beam
+    const hubR = ARENA_RADIUS * beam.hubClear
+    if (r < hubR * 0.7) continue
+
+    const half = beam.halfWidth + HIT_HALF_WIDTH_PAD
+    const dNow = Math.abs(angleDelta(ang, nearBeam.angle))
+    const dFut = Math.abs(angleDelta(ang, beam.angle))
+    const closing = dFut < dNow
+    const d = Math.min(dNow, dFut)
+    if (d > half + 0.55) continue
+
+    const side = Math.sign(angleDelta(ang, nearBeam.angle)) || 1
+    const rot = Math.sign(nearBeam.angularSpeed) || 1
+    // Escape opposite the sweep so we don't run into the blade
+    let escapeSide = -rot
+    if (!closing) escapeSide = side
+    const fleeAng = ang + escapeSide * (Math.PI / 2)
+
+    const proximity = Math.max(0, 1 - d / (half + 0.55))
+    const urgencyBoost = closing ? 1.45 : 1
+    const strength = (0.35 + proximity * 1.4) * urgencyBoost
+
+    fx += Math.cos(fleeAng) * strength
+    fy += Math.sin(fleeAng) * strength
+
+    // Dive hub only if already inside the wedge
+    if (d < half * 0.85 && r > hubR) {
+      fx += ((ARENA_CX - x) / r) * (1.1 + proximity)
+      fy += ((ARENA_CY - y) / r) * (1.1 + proximity)
+    } else if (d < half + 0.15 && r < SPAWN_RADIUS) {
+      fx += (dx / r) * 0.45
+      fy += (dy / r) * 0.45
     }
-    if (beam.pulse > 0) beam.pulse = Math.max(0, beam.pulse - dt * 2.5)
+  }
+
+  return clampMag(fx, fy, 2.2)
+}
+
+function sampleSaferPoint(
+  dodger: Dodger,
+  beams: LaserBeam[],
+  urgent: boolean,
+  peers: Dodger[] = [],
+  samples = 18,
+): Vec2 | null {
+  let best: Vec2 | null = null
+  let bestScore = -Infinity
+  const reach = urgent ? 95 : 110
+
+  for (let i = 0; i < samples; i++) {
+    const a = (TAU * i) / samples + dodger.skill * 0.7
+    const distR = reach * (0.4 + (i % 4) * 0.18)
+    const x = dodger.x + Math.cos(a) * distR
+    const y = dodger.y + Math.sin(a) * distR
+    if (!pointInArena(x, y, dodger.radius + 2)) continue
+
+    const danger = threatScore(x, y, beams)
+    const hubClear = currentHubClear(beams)
+    const hubR = ARENA_RADIUS * hubClear
+    const r = dist(x, y, ARENA_CX, ARENA_CY)
+
+    let hubBonus = 0
+    if (urgent && danger > 0.5 && r < hubR * 1.05) hubBonus = 0.4
+    else if (r < hubR * 0.85) hubBonus = -0.35
+
+    let crowdPen = 0
+    for (const p of peers) {
+      if (!p.alive) continue
+      const pd = dist(x, y, p.x, p.y)
+      if (pd < 55) crowdPen += (55 - pd) / 55
+    }
+
+    const floorBonus = 1 - Math.abs(r - SPAWN_RADIUS) / ARENA_RADIUS
+    const score = -danger * 4.2 + hubBonus + floorBonus * 0.25 - crowdPen * 0.9
+    if (score > bestScore) {
+      bestScore = score
+      best = { x, y }
+    }
+  }
+
+  if (urgent) {
+    // Tangential escape around current radius — don't collapse to hub
+    const ang = Math.atan2(dodger.y - ARENA_CY, dodger.x - ARENA_CX)
+    const rr = Math.max(
+      ARENA_RADIUS * currentHubClear(beams) + 20,
+      Math.min(ARENA_RADIUS - 20, dist(dodger.x, dodger.y, ARENA_CX, ARENA_CY)),
+    )
+    for (const sign of [-1, 1] as const) {
+      const a = ang + sign * 0.55
+      const x = ARENA_CX + Math.cos(a) * rr
+      const y = ARENA_CY + Math.sin(a) * rr
+      const danger = threatScore(x, y, beams)
+      const score = -danger * 4.5 + 0.5
+      if (score > bestScore) {
+        bestScore = score
+        best = { x, y }
+      }
+    }
+  }
+
+  return best
+}
+
+function pointInArena(x: number, y: number, pad = 0): boolean {
+  return dist(x, y, ARENA_CX, ARENA_CY) <= ARENA_RADIUS - pad
+}
+
+export function constrainToArena(dodger: Dodger): void {
+  const dx = dodger.x - ARENA_CX
+  const dy = dodger.y - ARENA_CY
+  const r = Math.hypot(dx, dy)
+  const maxR = ARENA_RADIUS - dodger.radius - 2
+  if (r > maxR && r > 1e-6) {
+    const s = maxR / r
+    dodger.x = ARENA_CX + dx * s
+    dodger.y = ARENA_CY + dy * s
+    // Bounce outward velocity inward
+    const nx = dx / r
+    const ny = dy / r
+    const vn = dodger.vx * nx + dodger.vy * ny
+    if (vn > 0) {
+      dodger.vx -= vn * nx * 1.4
+      dodger.vy -= vn * ny * 1.4
+    }
+  }
+}
+
+/** Hard disc–disc collision with push impulses. */
+export function resolveRacerCollisions(dodgers: Dodger[]): void {
+  const alive = dodgers.filter((d) => d.alive)
+  for (let i = 0; i < alive.length; i++) {
+    for (let j = i + 1; j < alive.length; j++) {
+      const a = alive[i]
+      const b = alive[j]
+      const dx = b.x - a.x
+      const dy = b.y - a.y
+      const d = Math.hypot(dx, dy)
+      const minD = a.radius + b.radius
+      if (d >= minD || d < 1e-5) continue
+
+      const nx = dx / d
+      const ny = dy / d
+      const overlap = minD - d
+      // Positional separation
+      const push = overlap * 0.55
+      a.x -= nx * push
+      a.y -= ny * push
+      b.x += nx * push
+      b.y += ny * push
+
+      // Relative velocity along normal
+      const rvx = b.vx - a.vx
+      const rvy = b.vy - a.vy
+      const velN = rvx * nx + rvy * ny
+      if (velN >= 0) {
+        // Already separating — still add shove from dash
+      } else {
+        const restitution = 0.35
+        const jImp = (-(1 + restitution) * velN) / 2
+        const dashBoost =
+          (a.dash > 0 ? 1.35 : 1) * (b.dash > 0 ? 1.35 : 1)
+        const impulse = jImp * dashBoost * (0.85 + (a.skill + b.skill) * 0.2)
+        a.vx -= impulse * nx
+        a.vy -= impulse * ny
+        b.vx += impulse * nx
+        b.vy += impulse * ny
+      }
+
+      // Contact shove — stronger when either racer is dashing / faster
+      const relSp = Math.hypot(a.vx, a.vy) + Math.hypot(b.vx, b.vy)
+      const shove =
+        55 +
+        relSp * 0.08 +
+        (a.dash > 0 || b.dash > 0 ? 70 : 0)
+      a.vx -= nx * shove * 0.045
+      a.vy -= ny * shove * 0.045
+      b.vx += nx * shove * 0.045
+      b.vy += ny * shove * 0.045
+
+      constrainToArena(a)
+      constrainToArena(b)
+    }
   }
 }
 
@@ -475,42 +664,31 @@ export function detectHits(
       dodger.nearMissCooldown = Math.max(0, dodger.nearMissCooldown - dt)
     }
 
-    const pos = ringPoint(dodger.angle)
-    let hit = false
-    let near = false
-    let worstClearance = Infinity
+    const sample = beamDangerAt(dodger.x, dodger.y, beams, { nearMiss: true })
+    let hit = sample.lethal
+    let near = sample.near
 
-    for (const beam of beams) {
-      if (beam.length < BEAM_LETHAL_LENGTH) continue
-      const d = Math.abs(angleDelta(dodger.angle, beam.angle))
-      const lethal = beam.halfWidth + HIT_HALF_WIDTH_PAD
-      const clearance = d - lethal
-      if (clearance < worstClearance) worstClearance = clearance
-      if (d <= lethal) {
-        hit = true
-      } else if (d <= lethal + NEAR_MISS_PAD) {
-        near = true
-      }
-    }
-
-    // Grace after spawn — still report near-misses for spectacle
-    if (hit && dodger.grace > 0) {
+    if (hit && (dodger.grace > 0 || dodger.dash > 0)) {
       hit = false
       near = true
     }
 
     if (hit) {
-      pending.push({ dodger, clearance: worstClearance })
+      pending.push({ dodger, clearance: sample.clearance })
       continue
     }
 
     if (near && dodger.nearMissCooldown <= 0) {
-      dodger.nearMissCooldown = 0.55
-      events.push({ kind: 'nearMiss', dodgerId: dodger.id, x: pos.x, y: pos.y })
+      dodger.nearMissCooldown = 0.5
+      events.push({
+        kind: 'nearMiss',
+        dodgerId: dodger.id,
+        x: dodger.x,
+        y: dodger.y,
+      })
     }
   }
 
-  // Never wipe the field in one frame — spare the least-centered as last standing
   const aliveBefore = dodgers.filter((d) => d.alive).length
   let toKill = pending
   if (pending.length > 0 && pending.length >= aliveBefore) {
@@ -520,12 +698,12 @@ export function detectHits(
   }
 
   for (const { dodger } of toKill) {
-    const pos = ringPoint(dodger.angle)
     dodger.alive = false
-    dodger.omega = 0
-    spawnBurst(particles, pos.x, pos.y, dodger.color, 18)
-    events.push({ kind: 'zap', dodgerId: dodger.id, x: pos.x, y: pos.y })
-    events.push({ kind: 'elim', dodgerId: dodger.id, x: pos.x, y: pos.y })
+    dodger.vx = 0
+    dodger.vy = 0
+    spawnBurst(particles, dodger.x, dodger.y, dodger.color, 20)
+    events.push({ kind: 'zap', dodgerId: dodger.id, x: dodger.x, y: dodger.y })
+    events.push({ kind: 'elim', dodgerId: dodger.id, x: dodger.x, y: dodger.y })
   }
 
   return events
@@ -566,19 +744,27 @@ export function updateParticles(particles: Particle[], dt: number) {
   }
 }
 
-export function spawnExtraBeam(beams: LaserBeam[]): LaserBeam | null {
+export function spawnExtraBeam(
+  beams: LaserBeam[],
+  hubClear?: number,
+): LaserBeam | null {
   if (beams.length >= 6) return null
   const id = beams.reduce((m, b) => Math.max(m, b.id), 0) + 1
   const sign = Math.random() < 0.5 ? -1 : 1
+  const hub =
+    hubClear ??
+    (beams[0]?.hubClear ?? HUB_SAFE_DEFAULT)
   const beam: LaserBeam = {
     id,
     angle: Math.random() * TAU,
-    angularSpeed: sign * (0.75 + Math.random() * 0.55),
-    halfWidth: 0.04,
-    length: BEAM_SPAWN_LENGTH * 0.55,
+    angularSpeed: sign * (0.7 + Math.random() * 0.5),
+    halfWidth: 0.038,
+    length: BEAM_SPAWN_LENGTH * 0.5,
     targetLength: 1,
+    hubClear: hub,
     color: BEAM_COLORS[id % BEAM_COLORS.length],
     pulse: 1,
+    telegraph: 1,
   }
   beams.push(beam)
   return beam
@@ -588,14 +774,23 @@ export function reverseBeams(beams: LaserBeam[]) {
   for (const beam of beams) {
     beam.angularSpeed *= -1
     beam.pulse = 1
+    beam.telegraph = 0.55
   }
 }
 
 export function narrowBeams(beams: LaserBeam[], factor = 0.82) {
   for (const beam of beams) {
-    // Narrowing safe wedges = widening beams
-    beam.halfWidth = Math.min(0.12, beam.halfWidth / factor)
+    beam.halfWidth = Math.min(0.11, beam.halfWidth / factor)
     beam.pulse = 0.7
+  }
+}
+
+/** Shrink safe hub toward floor — never seal completely. */
+export function shrinkHub(beams: LaserBeam[], factor = 0.82): void {
+  for (const beam of beams) {
+    beam.hubClear = Math.max(HUB_SAFE_FLOOR, beam.hubClear * factor)
+    beam.pulse = 0.75
+    beam.telegraph = 0.4
   }
 }
 
@@ -607,7 +802,7 @@ export function spikeBeamSpeed(beams: LaserBeam[], factor = 1.55) {
 }
 
 export function dodgerRadius(): number {
-  return DODGER_SIZE / 2
+  return RACER_RADIUS
 }
 
 export function arenaEdge(): number {

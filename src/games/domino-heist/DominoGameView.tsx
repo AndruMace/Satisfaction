@@ -7,28 +7,14 @@ export function DominoGameView({ shell }: GameViewProps) {
 
   return (
     <GameCanvas
-      level={heist.level}
-      launchKey={shell.launchKey}
-      reelKey={heist.reelKey}
-      playerCount={shell.playerCount}
-      tipForce={heist.tipForce}
-      chaos={heist.chaos}
+      mood={heist.mood}
+      seed={heist.seed}
+      tune={heist.tune}
       settings={heist.settings}
+      launchKey={shell.launchKey}
       autoRecord={shell.autoRecord}
       onPhaseChange={shell.setPhase}
-      onWinner={() => undefined}
-      onRaceMetrics={(metrics) => heist.setLastMetrics(metrics)}
-      onReelProgress={(current, total) => {
-        heist.setReelStatus(
-          current >= total
-            ? 'Picking highlights…'
-            : `Best-of reel ${current}/${total}`,
-        )
-      }}
-      onReelComplete={(top) => {
-        heist.setHighlights(top)
-        heist.setReelStatus('Highlight reel ready')
-      }}
+      onMetrics={(metrics) => heist.setLastMetrics(metrics)}
       onRecordingChange={shell.setIsRecording}
       onRecordingReady={(blob, filename, durationSec) => {
         shell.setPendingClip({ blob, filename, durationSec })

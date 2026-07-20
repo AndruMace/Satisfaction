@@ -1,149 +1,86 @@
-import type { ContestantId, GamePhase, Winner } from '../../shared/types'
+import { VIEW_HEIGHT, VIEW_WIDTH, type GamePhase } from '../../shared/types'
 
-export type { ContestantId, GamePhase, Winner }
-export { VIEW_WIDTH, VIEW_HEIGHT } from '../../shared/types'
-export { PLAYER_PROFILES } from '../../shared/profiles'
+export { VIEW_WIDTH, VIEW_HEIGHT }
+export type { GamePhase }
 
-export type ChainId = ContestantId
+/** Physical tile size in world units.
+ *  Tip direction is +local Z (thin edge). Face with pips is in XY. */
+export const DOMINO = {
+  /** Left–right face width (pips). */
+  face: 0.95,
+  /** Standing height. */
+  h: 1.85,
+  /** Thickness along tip axis. */
+  thick: 0.42,
+} as const
 
-export type Vec2 = { x: number; y: number }
+/**
+ * Center-to-center spacing along the tip path.
+ * Tuned for Rapier collision transfer (~face gap near thick×0.8–1.2).
+ */
+export const NORMAL_STEP = DOMINO.h * 0.48
 
-export type Platform = {
-  id: number
-  x: number
-  y: number
-  w: number
-  h: number
-}
+/** Slightly wider “near miss” spacing — still tippable with momentum. */
+export const CLUTCH_STEP = DOMINO.h * 0.58
 
-/** Gap / missing tooth along a chain path. */
-export type MissingTooth = {
-  chainSlot: number
-  /** Index in that chain's sequence where the gap sits. */
-  afterIndex: number
-  gapPx: number
-}
+/** Hard clamp — beyond this tips usually miss. */
+export const MAX_TIP_GAP = DOMINO.h * 0.7
 
-export type BlockerSpec = {
-  id: number
-  y: number
-  speed: number
-  width: number
-  height: number
-  /** 0–1 start phase along the horizontal path. */
-  phase: number
-}
+export type MoodId = 'spiral' | 'stairs' | 'bridge' | 'gauntlet' | 'serpentine'
 
-export type DominoState = 'upright' | 'tipping' | 'fallen' | 'shattered'
-
-export type Domino = {
-  id: number
-  chainId: ChainId
+export type DominoTile = {
   index: number
+  /** World center of the standing tile. */
   x: number
   y: number
-  w: number
-  h: number
-  angle: number
-  tipDir: 1 | -1
-  angularVel: number
-  state: DominoState
-  /** True for the final vault tip target. */
-  isVault: boolean
-  /** Blocker id that already struck this piece (0 = none). */
-  struckBy: number
+  z: number
+  /** Facing yaw (radians) — tip direction is +local Z after yaw. */
+  yaw: number
+  /** True only for sparse, extreme gaps that feel uncertain. */
+  nearMiss: boolean
+  /** Kind hint for props / drama. */
+  kind: 'normal' | 'gap' | 'stair' | 'bridge' | 'finale'
 }
 
-export type Chain = {
-  id: ChainId
-  color: string
-  label: string
-  alive: boolean
-  /** Furthest tipped index (−1 if none). */
-  tipFront: number
-  /** Seconds the cascade has been stalled mid-course. */
-  stallTimer: number
-  dominos: Domino[]
-}
-
-export type Blocker = {
-  id: number
+export type CourseProp = {
+  kind: 'vault' | 'pillar' | 'rail' | 'crack'
   x: number
   y: number
-  w: number
-  h: number
-  vx: number
-  baseSpeed: number
+  z: number
+  yaw: number
+  scale?: number
 }
 
-export type LevelData = {
+export type DominoCourse = {
   name: string
-  bounds: { width: number; height: number }
-  platforms: Platform[]
-  missingTeeth: MissingTooth[]
-  blockers: BlockerSpec[]
-  /** Spacing between successive dominos along Y. */
-  stepY: number
-  /** Dominos per chain before the vault piece. */
-  chainLength: number
-  vaultY: number
-  startY: number
+  seed: number
+  mood: MoodId
+  tiles: DominoTile[]
+  props: CourseProp[]
+  /** Bounding box for camera framing. */
+  bounds: { minX: number; maxX: number; minZ: number; maxZ: number; maxY: number }
 }
 
-export type Particle = {
-  x: number
-  y: number
-  vx: number
-  vy: number
-  life: number
-  maxLife: number
-  color: string
-  size: number
+export type TileState = 'upright' | 'tipping' | 'fallen'
+
+export type TipImpact = {
+  kind: 'tip' | 'gap' | 'finale'
+  index: number
+  speed: number
 }
 
-export type ImpactFlash = {
-  x: number
-  y: number
-  life: number
-  color: string
-  radius: number
-}
-
-export type ImpactKind = 'tip' | 'shatter' | 'collide' | 'blocker' | 'vault' | 'eliminated'
-
-export type ImpactEvent = {
-  chainId: ChainId
-  kind: ImpactKind
-  x: number
-  y: number
-  noteIndex: number
-  speed?: number
-  /** Spectator-facing reason for eliminations. */
-  reason?: 'stalled' | 'wiped'
-}
-
-export type OverlayState = {
+export type CascadeOverlay = {
   countdownValue: number | null
-  launchFlash: number
-  slowMo: number
-  photoFinish: number
-  heistAlarm: boolean
-  rivalryIds: ChainId[]
-  nameTags: boolean
-  eventBanner: string | null
-  eventBannerLife: number
-  hookLine: string | null
-  hookLineLife: number
-  winMessage: string | null
+  banner: string | null
+  bannerLife: number
+  finaleHold: number
 }
 
-export const DOMINO_W = 14
-export const DOMINO_H = 36
-export const TIP_ANGLE = Math.PI / 2.15
-export const TIP_CONTACT = 0.42
-export const BASE_TIP_SPEED = 4.2
-export const MAX_DOMINOS = 420
-/** Max center-to-center gap a tip can bridge at tipForce = 1. */
-export const BASE_TIP_GAP = DOMINO_H * 2.05
-/** Stall this long with no progress → chain eliminated. */
-export const STALL_ELIM_SEC = 0.85
+export type CascadeMetrics = {
+  tips: number
+  nearMisses: number
+  durationSec: number
+  seed: number
+  mood: MoodId
+  name: string
+}

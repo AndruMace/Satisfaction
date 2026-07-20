@@ -5,8 +5,8 @@ import { DominoGameView } from './DominoGameView'
 export const dominoHeistModule: SpectatorGameModule = {
   id: 'domino-heist',
   title: 'Domino Heist',
-  blurb: 'Tip race — first gold vault piece down wins. Gaps stall you out.',
-  idleHint: 'First to tip the gold vault piece wins',
+  blurb: 'Real physics cascade — spaced to look doomed, forced by nothing.',
+  idleHint: 'Launch and let gravity do the heist',
   available: true,
   GameView: DominoGameView,
   Controls: DominoControls,

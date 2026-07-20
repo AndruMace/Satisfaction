@@ -7,45 +7,35 @@ import {
 } from '../../shared/recorder'
 import { audioEngine } from './audio'
 import { GameLoop } from './loop'
-import type { HeistMetrics, RunSettings } from './settings'
-import type { GamePhase, LevelData, Winner } from './types'
+import type { CascadeRunSettings, DominoTune } from './settings'
+import type { CascadeMetrics, GamePhase, MoodId } from './types'
 
 type GameCanvasProps = {
-  level: LevelData | null
+  mood: MoodId
+  seed: number
+  tune: DominoTune
+  settings: CascadeRunSettings
   launchKey: number
-  reelKey: number
-  playerCount: number
-  tipForce: number
-  chaos: number
-  settings: RunSettings
   autoRecord: boolean
   onPhaseChange: (phase: GamePhase) => void
-  onWinner: (winner: Winner) => void
-  onRaceMetrics: (metrics: HeistMetrics) => void
-  onReelProgress: (current: number, total: number) => void
-  onReelComplete: (highlights: HeistMetrics[]) => void
+  onMetrics: (metrics: CascadeMetrics) => void
   onRecordingChange: (recording: boolean) => void
   onRecordingReady: (blob: Blob, filename: string, durationSec: number) => void
   onRecordingError: (message: string) => void
 }
 
-const FINISH_HOLD_MS = 1200
+const FINISH_HOLD_MS = 1600
 const GAME_SLUG = 'domino-heist'
 
 export function GameCanvas({
-  level,
-  launchKey,
-  reelKey,
-  playerCount,
-  tipForce,
-  chaos,
+  mood,
+  seed,
+  tune,
   settings,
+  launchKey,
   autoRecord,
   onPhaseChange,
-  onWinner,
-  onRaceMetrics,
-  onReelProgress,
-  onReelComplete,
+  onMetrics,
   onRecordingChange,
   onRecordingReady,
   onRecordingError,
@@ -54,36 +44,28 @@ export function GameCanvas({
   const loopRef = useRef<GameLoop | null>(null)
   const recorderRef = useRef(new RaceRecorder(audioEngine))
   const autoRecordRef = useRef(autoRecord)
-  const levelNameRef = useRef(level?.name ?? 'heist')
-  const reelActiveRef = useRef(false)
-  const reelClipIndexRef = useRef(0)
+  const courseNameRef = useRef('cascade')
   const finishTimerRef = useRef<number | null>(null)
   const phaseRef = useRef<GamePhase>('idle')
   const recordingOpsRef = useRef(Promise.resolve())
+  const cleanupRef = useRef<(() => void) | null>(null)
 
   const callbacksRef = useRef({
     onPhaseChange,
-    onWinner,
-    onRaceMetrics,
-    onReelProgress,
-    onReelComplete,
+    onMetrics,
     onRecordingChange,
     onRecordingReady,
     onRecordingError,
   })
   callbacksRef.current = {
     onPhaseChange,
-    onWinner,
-    onRaceMetrics,
-    onReelProgress,
-    onReelComplete,
+    onMetrics,
     onRecordingChange,
     onRecordingReady,
     onRecordingError,
   }
 
   autoRecordRef.current = autoRecord
-  levelNameRef.current = level?.name ?? 'heist'
 
   const clearFinishTimer = () => {
     if (finishTimerRef.current !== null) {
@@ -102,15 +84,11 @@ export function GameCanvas({
     if (!recorder.isRecording()) return
 
     const durationSec = recorder.elapsedSeconds()
-    const asReel = reelActiveRef.current
-    const reelIndex = asReel ? reelClipIndexRef.current : undefined
     const blob = await recorder.stop()
     callbacksRef.current.onRecordingChange(false)
     if (!blob) return
 
-    if (asReel) reelClipIndexRef.current += 1
-
-    const filename = buildRecordingFilename(GAME_SLUG, levelNameRef.current, reelIndex)
+    const filename = buildRecordingFilename(GAME_SLUG, courseNameRef.current)
     callbacksRef.current.onRecordingReady(blob, filename, durationSec)
     downloadBlob(blob, filename)
   }
@@ -142,76 +120,79 @@ export function GameCanvas({
     const canvas = canvasRef.current
     if (!canvas) return
 
+    let cancelled = false
     const recorder = recorderRef.current
 
-    const loop = new GameLoop(canvas, {
-      onPhaseChange: (phase) => {
-        const previous = phaseRef.current
-        phaseRef.current = phase
-        callbacksRef.current.onPhaseChange(phase)
+    void (async () => {
+      const { initDominoPhysics } = await import('./sim')
+      await initDominoPhysics()
+      if (cancelled || !canvasRef.current) return
 
-        if (
-          (phase === 'countdown' || phase === 'racing') &&
-          previous !== 'countdown' &&
-          previous !== 'racing'
-        ) {
-          clearFinishTimer()
-          void enqueueRecordingOp(async () => {
-            if (recorder.isRecording()) {
-              await stopAndDeliverInner()
-            }
-            await startRecordingInner()
-          })
-        }
+      const loop = new GameLoop(canvas, {
+        onPhaseChange: (phase) => {
+          const previous = phaseRef.current
+          phaseRef.current = phase
+          callbacksRef.current.onPhaseChange(phase)
 
-        if (phase === 'finished' && recorder.isRecording()) {
-          clearFinishTimer()
-          finishTimerRef.current = window.setTimeout(() => {
-            void enqueueRecordingOp(stopAndDeliverInner)
-          }, FINISH_HOLD_MS)
-        }
-      },
-      onWinner: (winner) => callbacksRef.current.onWinner(winner),
-      onRaceMetrics: (metrics) => callbacksRef.current.onRaceMetrics(metrics),
-      onReelProgress: (current, total) =>
-        callbacksRef.current.onReelProgress(current, total),
-      onReelComplete: (highlights) =>
-        callbacksRef.current.onReelComplete(highlights),
-      onAfterDraw: () => recorder.captureFrame(),
-    })
-    loopRef.current = loop
-    loop.start()
+          if (
+            (phase === 'countdown' || phase === 'racing') &&
+            previous !== 'countdown' &&
+            previous !== 'racing'
+          ) {
+            clearFinishTimer()
+            void enqueueRecordingOp(async () => {
+              if (recorder.isRecording()) {
+                await stopAndDeliverInner()
+              }
+              await startRecordingInner()
+            })
+          }
 
-    const onResize = () => loop.syncCanvasResolution()
-    window.addEventListener('resize', onResize)
+          if (phase === 'finished' && recorder.isRecording()) {
+            clearFinishTimer()
+            finishTimerRef.current = window.setTimeout(() => {
+              void enqueueRecordingOp(stopAndDeliverInner)
+            }, FINISH_HOLD_MS)
+          }
+        },
+        onMetrics: (metrics) => {
+          courseNameRef.current = metrics.name
+          callbacksRef.current.onMetrics(metrics)
+        },
+        onAfterDraw: () => recorder.captureFrame(),
+      })
+      if (cancelled) {
+        loop.destroy()
+        return
+      }
+      loopRef.current = loop
+      loop.loadCourse(mood, seed, tune)
+      loop.start()
+
+      const onResize = () => loop.syncCanvasResolution()
+      window.addEventListener('resize', onResize)
+
+      cleanupRef.current = () => {
+        window.removeEventListener('resize', onResize)
+        clearFinishTimer()
+        void recorder.stop()
+        loop.destroy()
+        loopRef.current = null
+      }
+    })()
 
     return () => {
-      window.removeEventListener('resize', onResize)
-      clearFinishTimer()
-      void recorder.stop()
-      loop.destroy()
-      loopRef.current = null
+      cancelled = true
+      cleanupRef.current?.()
+      cleanupRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
-    const loop = loopRef.current
-    if (!loop || !level) return
-    loop.loadLevel(level)
-  }, [level])
-
-  useEffect(() => {
-    loopRef.current?.setPlayerCount(playerCount)
-  }, [playerCount])
-
-  useEffect(() => {
-    loopRef.current?.setTipForce(tipForce)
-  }, [tipForce])
-
-  useEffect(() => {
-    loopRef.current?.setChaos(chaos)
-  }, [chaos])
+    loopRef.current?.loadCourse(mood, seed, tune)
+    courseNameRef.current = mood
+  }, [mood, seed, tune])
 
   useEffect(() => {
     loopRef.current?.setSettings(settings)
@@ -219,17 +200,14 @@ export function GameCanvas({
 
   useEffect(() => {
     if (launchKey === 0) return
-    reelActiveRef.current = false
-    reelClipIndexRef.current = 0
     loopRef.current?.launch()
   }, [launchKey])
 
-  useEffect(() => {
-    if (reelKey === 0) return
-    reelActiveRef.current = true
-    reelClipIndexRef.current = 1
-    loopRef.current?.startBestOfReel(8)
-  }, [reelKey])
-
-  return <canvas ref={canvasRef} className="game-canvas" aria-label="Domino heist game" />
+  return (
+    <canvas
+      ref={canvasRef}
+      className="game-canvas"
+      aria-label="Domino heist cascade"
+    />
+  )
 }

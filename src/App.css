@@ -618,6 +618,57 @@ body:has(.suite--domino-heist) {
   box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.22);
 }
 
+.app--domino-heist .tune-panel {
+  width: 100%;
+  border: 1px solid rgba(212, 175, 55, 0.18);
+  border-radius: 10px;
+  padding: 10px 12px 12px;
+  background: rgba(12, 14, 18, 0.55);
+}
+
+.app--domino-heist .tune-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.app--domino-heist .tune-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.app--domino-heist .tune-panel__title {
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(240, 230, 200, 0.72);
+}
+
+.app--domino-heist .tune-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px 14px;
+}
+
+.app--domino-heist .tune-grid .setting--slider {
+  min-width: 0;
+}
+
+.app--domino-heist .tune-grid .setting--slider span {
+  font-size: 0.72rem;
+  opacity: 0.85;
+}
+
+.app--domino-heist .tune-grid .setting--slider input[type='range'] {
+  margin: 6px 0 2px;
+  height: 6px;
+}
+
 /* Laser Roulette — neon cyber arena */
 body:has(.suite--laser-roulette),
 .suite--laser-roulette,
@@ -742,62 +793,630 @@ body:has(.suite--bubble-war) {
   box-shadow: 0 0 0 3px rgba(255, 140, 200, 0.25);
 }
 
-/* Greedy Grab — treasure cave */
-body:has(.suite--greedy-grab),
-.suite--greedy-grab,
-.app--greedy-grab {
-  --bg: #0c0805;
-  --surface: #1a120c;
-  --text: #b89a72;
-  --text-bright: #ffe8b0;
-  --border: rgba(255, 180, 60, 0.14);
-  --stage-shadow: 0 24px 80px rgba(40, 10, 0, 0.65);
-  --accent: #ffb020;
-  --accent-2: #e85d4c;
-  --brand-font: 'Archivo Black', 'Syne', system-ui, sans-serif;
+/* Cascade Tycoon — dark pegboard empire */
+body:has(.suite--cascade-tycoon),
+.suite--cascade-tycoon,
+.app--cascade-tycoon {
+  --bg: #05080f;
+  --surface: #0d1524;
+  --text: #8fa3c4;
+  --text-bright: #e8f2ff;
+  --border: rgba(100, 170, 255, 0.14);
+  --stage-shadow: 0 24px 80px rgba(0, 20, 50, 0.65);
+  --accent: #4fc3f7;
+  --accent-2: #ffb020;
+  --brand-font: 'Orbitron', 'Syne', system-ui, sans-serif;
 }
 
-body:has(.suite--greedy-grab) {
+body:has(.suite--cascade-tycoon) {
   color: var(--text);
   background:
-    radial-gradient(ellipse 70% 45% at 50% -8%, rgba(255, 176, 32, 0.12), transparent 58%),
-    radial-gradient(ellipse 55% 40% at 20% 110%, rgba(232, 93, 76, 0.12), transparent 55%),
+    radial-gradient(ellipse 70% 45% at 50% -8%, rgba(79, 195, 247, 0.14), transparent 58%),
+    radial-gradient(ellipse 50% 35% at 85% 105%, rgba(255, 176, 32, 0.1), transparent 55%),
     var(--bg);
 }
 
-.app--greedy-grab .app__brand h1 {
-  letter-spacing: 0.01em;
+.app--cascade-tycoon .app__brand h1 {
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  font-size: clamp(1.7rem, 7vw, 2.4rem);
+  font-size: clamp(1.45rem, 6vw, 2.1rem);
 }
 
-.app--greedy-grab .stage {
-  background: #120c08;
-  border-color: rgba(255, 176, 32, 0.28);
+.app--cascade-tycoon .stage {
+  background: #060a12;
+  border-color: rgba(79, 195, 247, 0.28);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+}
+
+.suite--cascade-tycoon .game-nav__tab--active {
+  border-color: rgba(79, 195, 247, 0.45);
+  background: rgba(79, 195, 247, 0.1);
+}
+
+.app--cascade-tycoon .pill--active,
+.app--cascade-tycoon .spectacle-toggle--on {
+  border-color: rgba(79, 195, 247, 0.5);
+  background: rgba(79, 195, 247, 0.12);
+  color: #e8f2ff;
+}
+
+.app--cascade-tycoon .btn--primary {
+  background: linear-gradient(135deg, rgba(79, 195, 247, 0.35), rgba(255, 176, 32, 0.25));
+  border-color: rgba(79, 195, 247, 0.4);
+}
+
+.app--cascade-tycoon .stage__overlay--idle {
+  display: none;
+}
+
+.cascade-layout {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.cascade-viewport {
+  flex: 0 0 80%;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.cascade-canvas {
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  touch-action: manipulation;
+}
+
+.cascade-dash {
+  flex: 0 0 20%;
+  min-height: 0;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px 10px;
+  background:
+    linear-gradient(180deg, rgba(10, 18, 32, 0.92), rgba(6, 10, 18, 0.98));
+  border-top: 1px solid rgba(79, 195, 247, 0.22);
+  backdrop-filter: blur(10px);
+  overflow: auto;
+}
+
+.cascade-dash__treasury {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cascade-dash__label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(180, 210, 255, 0.55);
+}
+
+.cascade-dash__balance {
+  font-family: var(--brand-font);
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #ffe082;
+  letter-spacing: 0.02em;
+}
+
+.cascade-dash__payout {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #69f0ae;
+}
+
+.cascade-dash__upgrades {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.cascade-upgrade {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 7px 8px;
   border-radius: 8px;
+  border: 1px solid rgba(100, 170, 255, 0.16);
+  background: rgba(20, 32, 52, 0.85);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, opacity 0.15s;
 }
 
-.suite--greedy-grab .game-nav__tab--active {
-  border-color: rgba(255, 176, 32, 0.45);
+.cascade-upgrade:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cascade-upgrade--ready:not(:disabled) {
+  border-color: rgba(255, 176, 32, 0.55);
   background: rgba(255, 176, 32, 0.1);
+  color: var(--text-bright);
 }
 
-.app--greedy-grab .pill--active,
-.app--greedy-grab .spectacle-toggle--on {
-  border-color: rgba(255, 176, 32, 0.5);
-  background: rgba(255, 176, 32, 0.1);
-  color: #ffe8b0;
+.cascade-upgrade__name {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--text-bright);
 }
 
-.app--greedy-grab .btn--primary {
-  background: linear-gradient(135deg, rgba(232, 93, 76, 0.35), rgba(255, 176, 32, 0.3));
-  border-color: rgba(255, 176, 32, 0.4);
+.cascade-upgrade__name em {
+  font-style: normal;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: rgba(180, 210, 255, 0.55);
 }
 
-.app--greedy-grab .setting--slider input[type='range']::-webkit-slider-thumb,
-.app--greedy-grab .setting--slider input[type='range']::-moz-range-thumb {
-  border-color: #ffb020;
-  box-shadow: 0 0 0 3px rgba(255, 176, 32, 0.25);
+.cascade-upgrade__hint {
+  font-size: 0.58rem;
+  color: rgba(160, 190, 230, 0.55);
+}
+
+.cascade-upgrade__cost {
+  margin-top: 2px;
+  font-family: var(--brand-font);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #ffca28;
+}
+
+.cascade-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  font-size: 0.72rem;
+  color: rgba(180, 210, 255, 0.65);
+}
+
+/* Perfect Clear — dark void cascade */
+body:has(.suite--perfect-clear),
+.suite--perfect-clear,
+.app--perfect-clear {
+  --bg: #02030a;
+  --surface: #0a0c16;
+  --text: #9aa3c0;
+  --text-bright: #eef1ff;
+  --border: rgba(140, 160, 255, 0.12);
+  --stage-shadow: 0 24px 80px rgba(0, 0, 20, 0.75);
+  --accent: #a78bfa;
+  --accent-2: #ffe082;
+  --brand-font: 'Orbitron', 'Syne', system-ui, sans-serif;
+}
+
+body:has(.suite--perfect-clear) {
+  color: var(--text);
+  background:
+    radial-gradient(ellipse 60% 40% at 50% -5%, rgba(167, 139, 250, 0.14), transparent 55%),
+    radial-gradient(ellipse 50% 35% at 20% 100%, rgba(255, 224, 130, 0.08), transparent 50%),
+    var(--bg);
+}
+
+.app--perfect-clear .app__brand h1 {
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: clamp(1.5rem, 6.5vw, 2.2rem);
+}
+
+.app--perfect-clear .stage {
+  background: #03040a;
+  border-color: rgba(167, 139, 250, 0.22);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.suite--perfect-clear .game-nav__tab--active {
+  border-color: rgba(167, 139, 250, 0.5);
+  background: rgba(167, 139, 250, 0.12);
+}
+
+.app--perfect-clear .pill--active,
+.app--perfect-clear .spectacle-toggle--on {
+  border-color: rgba(167, 139, 250, 0.5);
+  background: rgba(167, 139, 250, 0.12);
+  color: #eef1ff;
+}
+
+.app--perfect-clear .btn--primary {
+  background: linear-gradient(135deg, rgba(167, 139, 250, 0.4), rgba(255, 224, 130, 0.22));
+  border-color: rgba(255, 224, 130, 0.35);
+}
+
+.app--perfect-clear .stage__overlay--idle {
+  display: none;
+}
+
+.clear-layout {
+  width: 100%;
+  height: 100%;
+}
+
+.clear-canvas {
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  touch-action: manipulation;
+  display: block;
+}
+
+.clear-hint {
+  margin: 0;
+  text-align: center;
+  font-size: 0.78rem;
+  color: rgba(180, 190, 230, 0.65);
+  line-height: 1.35;
+}
+
+.clear-level-pill {
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--text-bright);
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(167, 139, 250, 0.28);
+  background: rgba(167, 139, 250, 0.08);
+}
+
+/* Squish Fit — soft gel jar */
+body:has(.suite--squish-fit),
+.suite--squish-fit,
+.app--squish-fit {
+  --bg: #12081a;
+  --surface: #1c1028;
+  --text: #c9a8d8;
+  --text-bright: #ffe6f5;
+  --border: rgba(255, 140, 200, 0.14);
+  --stage-shadow: 0 24px 80px rgba(40, 0, 40, 0.65);
+  --accent: #ff5ca8;
+  --accent-2: #5ce1ff;
+  --brand-font: 'Fredoka', 'Syne', system-ui, sans-serif;
+}
+
+body:has(.suite--squish-fit) {
+  color: var(--text);
+  background:
+    radial-gradient(ellipse 65% 40% at 50% -8%, rgba(255, 92, 168, 0.16), transparent 55%),
+    radial-gradient(ellipse 50% 35% at 90% 100%, rgba(92, 225, 255, 0.1), transparent 50%),
+    var(--bg);
+}
+
+.app--squish-fit .app__brand h1 {
+  letter-spacing: 0.02em;
+  font-size: clamp(1.7rem, 7vw, 2.5rem);
+}
+
+.app--squish-fit .stage {
+  background: #140a1c;
+  border-color: rgba(255, 140, 200, 0.28);
+  border-radius: 18px;
+}
+
+.suite--squish-fit .game-nav__tab--active {
+  border-color: rgba(255, 92, 168, 0.5);
+  background: rgba(255, 92, 168, 0.12);
+}
+
+.app--squish-fit .pill--active,
+.app--squish-fit .spectacle-toggle--on {
+  border-color: rgba(92, 225, 255, 0.45);
+  background: rgba(92, 225, 255, 0.1);
+  color: #ffe6f5;
+}
+
+.app--squish-fit .btn--primary {
+  background: linear-gradient(135deg, rgba(255, 92, 168, 0.4), rgba(92, 225, 255, 0.25));
+  border-color: rgba(255, 140, 200, 0.4);
+}
+
+.app--squish-fit .stage__overlay--idle {
+  display: none;
+}
+
+.squish-layout {
+  width: 100%;
+  height: 100%;
+}
+
+.squish-canvas {
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  touch-action: manipulation;
+  display: block;
+}
+
+.squish-hint {
+  margin: 0;
+  text-align: center;
+  font-size: 0.78rem;
+  color: rgba(255, 200, 230, 0.65);
+  line-height: 1.35;
+}
+
+/* Drift Tunnel — obsidian conduit */
+body:has(.suite--drift-tunnel),
+.suite--drift-tunnel,
+.app--drift-tunnel {
+  --bg: #02020a;
+  --surface: #0e0b2c;
+  --text: #d4d8ff;
+  --text-bright: #ffffff;
+  --border: rgba(0, 255, 213, 0.38);
+  --stage-shadow: 0 24px 90px rgba(38, 0, 255, 0.38);
+  --accent: #00ffd5;
+  --accent-2: #ff35d3;
+  --brand-font: 'Orbitron', 'Syne', system-ui, sans-serif;
+}
+
+body:has(.suite--drift-tunnel) {
+  color: var(--text);
+  background:
+    radial-gradient(ellipse 60% 45% at 50% -5%, rgba(0, 255, 213, 0.24), transparent 58%),
+    radial-gradient(ellipse 48% 38% at 85% 100%, rgba(255, 53, 211, 0.22), transparent 55%),
+    radial-gradient(ellipse 40% 32% at 0% 65%, rgba(71, 61, 255, 0.18), transparent 50%),
+    var(--bg);
+}
+
+.app--drift-tunnel .app__brand h1 {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: clamp(1.45rem, 6vw, 2.1rem);
+  color: #ffffff;
+  text-shadow:
+    0 0 18px rgba(0, 255, 213, 0.7),
+    0 0 42px rgba(255, 53, 211, 0.35);
+}
+
+.app--drift-tunnel .stage {
+  background: #05060e;
+  border-color: rgba(0, 255, 213, 0.68);
+  box-shadow:
+    0 0 0 1px rgba(255, 53, 211, 0.22),
+    0 20px 70px rgba(34, 0, 120, 0.55);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.suite--drift-tunnel .game-nav__tab--active {
+  border-color: rgba(0, 255, 213, 0.85);
+  background: linear-gradient(135deg, rgba(0, 255, 213, 0.24), rgba(255, 53, 211, 0.16));
+  color: #ffffff;
+}
+
+.app--drift-tunnel .pill--active,
+.app--drift-tunnel .spectacle-toggle--on {
+  border-color: rgba(0, 255, 213, 0.9);
+  background: linear-gradient(135deg, rgba(0, 255, 213, 0.3), rgba(71, 61, 255, 0.28));
+  color: #ffffff;
+  box-shadow: 0 0 16px rgba(0, 255, 213, 0.18);
+}
+
+.app--drift-tunnel .btn--primary {
+  background: linear-gradient(135deg, #00cfae, #554cff 62%, #e530bd);
+  border-color: rgba(255, 255, 255, 0.5);
+  color: #ffffff;
+  box-shadow: 0 0 22px rgba(0, 255, 213, 0.35);
+}
+
+.app--drift-tunnel .stage__overlay--idle {
+  display: none;
+}
+
+.drift-layout {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.drift-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+.drift-hud {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--brand-font);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: #ffffff;
+  pointer-events: none;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7);
+}
+
+.drift-hud__boost {
+  color: #67ff4d;
+  font-weight: 700;
+  text-shadow: 0 0 12px rgba(103, 255, 77, 0.9);
+}
+
+.drift-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  background: radial-gradient(circle, rgba(30, 18, 83, 0.72), rgba(2, 3, 10, 0.88));
+  border: none;
+  color: var(--text-bright);
+  cursor: pointer;
+  z-index: 2;
+}
+
+.drift-overlay--idle {
+  width: 100%;
+}
+
+.drift-overlay__title {
+  font-family: var(--brand-font);
+  font-size: 1.35rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.drift-overlay__sub {
+  font-size: 0.82rem;
+  color: rgba(229, 233, 255, 0.9);
+  text-align: center;
+  max-width: 16rem;
+  line-height: 1.4;
+}
+
+.drift-overlay__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.drift-touch {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: end;
+  pointer-events: none;
+  z-index: 1;
+  padding: 12px;
+}
+
+.drift-touch__zone,
+.drift-touch__jump {
+  pointer-events: auto;
+  border: none;
+  background: transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.drift-touch__zone {
+  height: 42%;
+  min-height: 120px;
+}
+
+.drift-touch__jump {
+  margin-bottom: 18px;
+  padding: 14px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 255, 213, 0.8);
+  background: linear-gradient(135deg, rgba(0, 255, 213, 0.35), rgba(85, 76, 255, 0.45));
+  color: #ffffff;
+  box-shadow: 0 0 20px rgba(0, 255, 213, 0.28);
+  font-family: var(--brand-font);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.drift-hint {
+  margin: 0;
+  text-align: center;
+  font-size: 0.78rem;
+  color: rgba(218, 225, 255, 0.86);
+  line-height: 1.35;
+}
+
+.drift-level-pill {
+  font-size: 0.78rem;
+  color: var(--text-bright);
+  opacity: 0.85;
+}
+
+.drift-leaderboards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
+.drift-leaderboard {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid rgba(0, 255, 213, 0.25);
+  border-radius: 10px;
+  background: linear-gradient(145deg, rgba(16, 12, 48, 0.9), rgba(6, 9, 28, 0.86));
+}
+
+.drift-leaderboard h3 {
+  margin: 0 0 6px;
+  color: #ffffff;
+  font-family: var(--brand-font);
+  font-size: 0.67rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.drift-leaderboard ol {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding-left: 1.4rem;
+  color: rgba(199, 210, 255, 0.64);
+  font-size: 0.68rem;
+}
+
+.drift-leaderboard li {
+  padding-left: 2px;
+}
+
+.drift-leaderboard li::marker {
+  color: rgba(0, 255, 213, 0.7);
+  font-variant-numeric: tabular-nums;
+}
+
+.drift-leaderboard li > span,
+.drift-leaderboard li > small {
+  font-variant-numeric: tabular-nums;
+}
+
+.drift-leaderboard li > span {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.drift-leaderboard li > small {
+  display: block;
+  margin-top: 1px;
+  color: rgba(202, 211, 255, 0.66);
+  font-size: 0.58rem;
+}
+
+.drift-leaderboard > p {
+  margin: 0;
+  color: rgba(202, 211, 255, 0.58);
+  font-size: 0.68rem;
+  text-align: center;
 }
 
 @media (max-width: 480px) {
@@ -824,6 +1443,18 @@ body:has(.suite--greedy-grab) {
   }
 
   .app--laser-roulette .stage {
+    border-radius: 4px;
+  }
+
+  .app--perfect-clear .stage {
+    border-radius: 4px;
+  }
+
+  .app--squish-fit .stage {
+    border-radius: 14px;
+  }
+
+  .app--drift-tunnel .stage {
     border-radius: 4px;
   }
 }

@@ -1,9 +1,12 @@
 import { useMemo, useState } from 'react'
 import { BounceRaceShell } from '../games/bounce-race'
 import { BubbleWarShell } from '../games/bubble-war'
+import { CascadeTycoonShell } from '../games/cascade-tycoon'
 import { DominoHeistShell } from '../games/domino-heist'
-import { GreedyGrabShell } from '../games/greedy-grab'
+import { DriftTunnelShell } from '../games/drift-tunnel'
 import { LaserRouletteShell } from '../games/laser-roulette'
+import { PerfectClearShell } from '../games/perfect-clear'
+import { SquishFitShell } from '../games/squish-fit'
 import { isRecordingSupported } from '../shared/recorder'
 import type { GameShellApi, SpectatorGameModule } from '../shared/module'
 import type { GamePhase } from '../shared/types'
@@ -115,8 +118,20 @@ export function GameShell({ module }: GameShellProps) {
     return <BubbleWarShell>{content}</BubbleWarShell>
   }
 
-  if (module.id === 'greedy-grab') {
-    return <GreedyGrabShell>{content}</GreedyGrabShell>
+  if (module.id === 'cascade-tycoon') {
+    return <CascadeTycoonShell>{content}</CascadeTycoonShell>
+  }
+
+  if (module.id === 'perfect-clear') {
+    return <PerfectClearShell>{content}</PerfectClearShell>
+  }
+
+  if (module.id === 'squish-fit') {
+    return <SquishFitShell>{content}</SquishFitShell>
+  }
+
+  if (module.id === 'drift-tunnel') {
+    return <DriftTunnelShell>{content}</DriftTunnelShell>
   }
 
   return content

@@ -1,12 +1,13 @@
 import { PLAYER_PROFILES } from '../../shared/profiles'
 import { audioEngine } from './audio'
 import {
-  assignHomes,
   createBeams,
   createDodgers,
   detectHits,
   narrowBeams,
+  resolveRacerCollisions,
   reverseBeams,
+  shrinkHub,
   spawnExtraBeam,
   spikeBeamSpeed,
   stepAi,
@@ -84,6 +85,7 @@ export class GameLoop {
   private speedSpikeDone = false
   private extraBeamDone = false
   private narrowDone = false
+  private hubShrinkDone = false
   private reverseDone = false
   private finalTwoBanner = false
   private surviveRemaining = 0
@@ -176,6 +178,7 @@ export class GameLoop {
     this.speedSpikeDone = false
     this.extraBeamDone = false
     this.narrowDone = false
+    this.hubShrinkDone = false
     this.reverseDone = false
     this.finalTwoBanner = false
     this.surviveRemaining = this.course.surviveSeconds
@@ -375,7 +378,6 @@ export class GameLoop {
     this.updateEscalation(pressure)
 
     stepBeams(this.beams, dt, this.beamSpeedScale)
-    assignHomes(this.dodgers, this.beams)
 
     for (const dodger of this.dodgers) {
       stepAi(
@@ -389,6 +391,8 @@ export class GameLoop {
         this.dodgers,
       )
     }
+
+    resolveRacerCollisions(this.dodgers)
 
     const events = detectHits(this.dodgers, this.beams, dt, this.particles)
     for (const event of events) {
@@ -497,6 +501,12 @@ export class GameLoop {
       this.narrowDone = true
       narrowBeams(this.beams, 0.78)
       this.banner('NARROW WEDGES', 'narrow')
+    }
+
+    if (!this.hubShrinkDone && t >= escalateAt + 4.2) {
+      this.hubShrinkDone = true
+      shrinkHub(this.beams, 0.78)
+      this.banner('HUB CLOSING', 'narrow')
     }
 
     if (

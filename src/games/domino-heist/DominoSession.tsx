@@ -1,147 +1,92 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useMemo,
   useState,
   type ReactNode,
 } from 'react'
-import { generateProceduralLevel, randomSeed } from './courses/procedural'
-import { getPreset, type PresetId, presetLevels } from './courses/presets'
+import { generateCourse, MOOD_OPTIONS, randomSeed } from './course'
 import {
   DEFAULT_RUN_SETTINGS,
-  type HeistMetrics,
-  type RunSettings,
-  scoreHeist,
-  SETTING_TOGGLES,
+  DEFAULT_TUNE,
+  type CascadeRunSettings,
+  type DominoTune,
 } from './settings'
-import type { LevelData } from './types'
+import type { CascadeMetrics, DominoCourse, MoodId } from './types'
 
-export type CourseChoice = PresetId | 'procedural'
-
-const PRESET_OPTIONS: { id: CourseChoice; label: string }[] = [
-  { id: 'vault-run', label: 'Vault Run' },
-  { id: 'gap-gauntlet', label: 'Gap Gauntlet' },
-  { id: 'crossfire', label: 'Crossfire' },
-  { id: 'alarm-sprint', label: 'Alarm Sprint' },
-  { id: 'procedural', label: 'Procedural' },
-]
-
-export { PRESET_OPTIONS }
-
-function resolveLevel(choice: CourseChoice, seed: number): LevelData {
-  if (choice === 'procedural') return generateProceduralLevel(seed)
-  return getPreset(choice)
-}
+export { MOOD_OPTIONS }
 
 export type DominoHeistSession = {
-  course: CourseChoice
-  setCourse: (course: CourseChoice) => void
+  mood: MoodId
+  setMood: (mood: MoodId) => void
   seed: number
   newSeed: () => void
-  nextPreset: () => void
-  reelKey: number
-  startReel: () => void
-  tipForce: number
-  setTipForce: (value: number) => void
-  chaos: number
-  setChaos: (value: number) => void
-  settings: RunSettings
-  toggleSetting: (key: keyof RunSettings) => void
-  setGroup: (group: string, enabled: boolean) => void
-  showSpectacle: boolean
-  setShowSpectacle: (show: boolean) => void
-  reelStatus: string | null
-  setReelStatus: (status: string | null) => void
-  highlights: HeistMetrics[]
-  setHighlights: (metrics: HeistMetrics[]) => void
-  lastMetrics: HeistMetrics | null
-  setLastMetrics: (metrics: HeistMetrics | null) => void
-  level: LevelData
+  nextMood: () => void
+  tune: DominoTune
+  setTune: (patch: Partial<DominoTune>) => void
+  resetTune: () => void
+  settings: CascadeRunSettings
+  lastMetrics: CascadeMetrics | null
+  setLastMetrics: (metrics: CascadeMetrics | null) => void
+  course: DominoCourse
   levelHint: string
-  scoreHeist: typeof scoreHeist
-  SETTING_TOGGLES: typeof SETTING_TOGGLES
 }
 
 const DominoHeistContext = createContext<DominoHeistSession | null>(null)
 
 export function DominoHeistProvider({ children }: { children: ReactNode }) {
-  const [course, setCourseState] = useState<CourseChoice>('vault-run')
+  const [mood, setMoodState] = useState<MoodId>('spiral')
   const [seed, setSeed] = useState(() => randomSeed())
-  const [reelKey, setReelKey] = useState(0)
-  const [tipForce, setTipForce] = useState(1)
-  const [chaos, setChaos] = useState(0.35)
-  const [settings, setSettings] = useState<RunSettings>({ ...DEFAULT_RUN_SETTINGS })
-  const [showSpectacle, setShowSpectacle] = useState(false)
-  const [reelStatus, setReelStatus] = useState<string | null>(null)
-  const [highlights, setHighlights] = useState<HeistMetrics[]>([])
-  const [lastMetrics, setLastMetrics] = useState<HeistMetrics | null>(null)
+  const [tune, setTuneState] = useState<DominoTune>(() => ({ ...DEFAULT_TUNE }))
+  const [lastMetrics, setLastMetrics] = useState<CascadeMetrics | null>(null)
+  const settings = DEFAULT_RUN_SETTINGS
 
-  const level = useMemo(() => resolveLevel(course, seed), [course, seed])
+  const course = useMemo(
+    () =>
+      generateCourse(mood, seed, {
+        drama: tune.drama,
+        spacing: tune.spacing,
+        clutchSpacing: tune.clutchSpacing,
+      }),
+    [mood, seed, tune.drama, tune.spacing, tune.clutchSpacing],
+  )
 
-  const setCourse = (next: CourseChoice) => {
-    setCourseState(next)
-    if (next === 'procedural') setSeed(randomSeed())
-  }
-
-  const newSeed = () => {
+  const setMood = (next: MoodId) => {
+    setMoodState(next)
     setSeed(randomSeed())
   }
 
-  const nextPreset = () => {
-    const idx = PRESET_OPTIONS.findIndex((o) => o.id === course)
-    const next = PRESET_OPTIONS[(idx + 1) % PRESET_OPTIONS.length]
-    setCourse(next.id)
+  const newSeed = () => setSeed(randomSeed())
+
+  const nextMood = () => {
+    const idx = MOOD_OPTIONS.findIndex((o) => o.id === mood)
+    const next = MOOD_OPTIONS[(idx + 1) % MOOD_OPTIONS.length]
+    setMood(next.id)
   }
 
-  const startReel = () => {
-    setHighlights([])
-    setReelStatus('Collecting heists…')
-    setReelKey((k) => k + 1)
-  }
+  const setTune = useCallback((patch: Partial<DominoTune>) => {
+    setTuneState((prev) => ({ ...prev, ...patch }))
+  }, [])
 
-  const toggleSetting = (key: keyof RunSettings) => {
-    setSettings((current) => ({ ...current, [key]: !current[key] }))
-  }
-
-  const setGroup = (group: string, enabled: boolean) => {
-    setSettings((current) => {
-      const next = { ...current }
-      for (const toggle of SETTING_TOGGLES) {
-        if (toggle.group === group) next[toggle.key] = enabled
-      }
-      return next
-    })
-  }
-
-  const levelHint = `${level.name} · ${presetLevels.some((p) => p.name === level.name) ? 'preset' : 'procedural'}`
+  const resetTune = useCallback(() => {
+    setTuneState({ ...DEFAULT_TUNE })
+  }, [])
 
   const value: DominoHeistSession = {
-    course,
-    setCourse,
+    mood,
+    setMood,
     seed,
     newSeed,
-    nextPreset,
-    reelKey,
-    startReel,
-    tipForce,
-    setTipForce,
-    chaos,
-    setChaos,
+    nextMood,
+    tune,
+    setTune,
+    resetTune,
     settings,
-    toggleSetting,
-    setGroup,
-    showSpectacle,
-    setShowSpectacle,
-    reelStatus,
-    setReelStatus,
-    highlights,
-    setHighlights,
     lastMetrics,
     setLastMetrics,
-    level,
-    levelHint,
-    scoreHeist,
-    SETTING_TOGGLES,
+    course,
+    levelHint: `${course.name} · seed ${seed.toString(16)}`,
   }
 
   return (

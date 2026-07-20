@@ -3,28 +3,27 @@ import {
   ARENA_CY,
   ARENA_RADIUS,
   type Dodger,
+  HUB_SAFE_DEFAULT,
   type ImpactFlash,
   type LaserBeam,
   type OverlayState,
   type Particle,
   PLAYER_PROFILES,
-  RING_RADIUS,
   VIEW_HEIGHT,
   VIEW_WIDTH,
   type Winner,
 } from './types'
-import { ringPoint } from './physics'
 
 const FONT = '"Orbitron", "Syne", system-ui, sans-serif'
 
 const COLORS = {
   bg0: '#05020c',
   bg1: '#16082a',
-  ring: 'rgba(0, 240, 255, 0.28)',
-  ringBright: 'rgba(255, 45, 149, 0.45)',
   floor: 'rgba(18, 8, 36, 0.92)',
   magenta: '#ff2d95',
   cyan: '#00f0ff',
+  hubFill: 'rgba(0, 240, 255, 0.06)',
+  hubStroke: 'rgba(0, 240, 255, 0.35)',
 }
 
 export function renderFrame(
@@ -40,10 +39,10 @@ export function renderFrame(
   ctx.save()
   drawBackground(ctx, overlay.tension)
   drawArena(ctx)
+  drawSafeHub(ctx, beams)
   drawSafeWedgesHint(ctx, beams)
 
   for (const beam of beams) drawBeam(ctx, beam)
-  drawRing(ctx)
 
   for (const dodger of dodgers) {
     if (dodger.alive) drawDodger(ctx, dodger, rivalryIds.includes(dodger.id))
@@ -98,6 +97,11 @@ export function renderFrame(
   }
 }
 
+function currentHubRadius(beams: LaserBeam[]): number {
+  if (beams.length === 0) return ARENA_RADIUS * HUB_SAFE_DEFAULT
+  return ARENA_RADIUS * Math.min(...beams.map((b) => b.hubClear))
+}
+
 function drawBackground(ctx: CanvasRenderingContext2D, tension: number) {
   const g = ctx.createRadialGradient(
     ARENA_CX,
@@ -112,13 +116,11 @@ function drawBackground(ctx: CanvasRenderingContext2D, tension: number) {
   ctx.fillStyle = g
   ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT)
 
-  // Scanlines
   ctx.fillStyle = 'rgba(0, 240, 255, 0.025)'
   for (let y = 0; y < VIEW_HEIGHT; y += 4) {
     ctx.fillRect(0, y, VIEW_WIDTH, 1)
   }
 
-  // Corner neon ticks
   ctx.strokeStyle = 'rgba(255, 45, 149, 0.35)'
   ctx.lineWidth = 2
   const tick = 18
@@ -165,7 +167,6 @@ function drawArena(ctx: CanvasRenderingContext2D) {
   ctx.fillStyle = COLORS.floor
   ctx.fill()
 
-  // Concentric tech rings
   ctx.strokeStyle = 'rgba(0, 240, 255, 0.08)'
   ctx.lineWidth = 1
   for (let i = 1; i <= 4; i++) {
@@ -179,41 +180,55 @@ function drawArena(ctx: CanvasRenderingContext2D) {
   ctx.beginPath()
   ctx.arc(ARENA_CX, ARENA_CY, ARENA_RADIUS, 0, Math.PI * 2)
   ctx.stroke()
+}
 
-  // Hub
+function drawSafeHub(ctx: CanvasRenderingContext2D, beams: LaserBeam[]) {
+  const hubR = currentHubRadius(beams)
+  if (hubR < 4) return
+
+  const g = ctx.createRadialGradient(
+    ARENA_CX,
+    ARENA_CY,
+    hubR * 0.15,
+    ARENA_CX,
+    ARENA_CY,
+    hubR,
+  )
+  g.addColorStop(0, 'rgba(0, 240, 255, 0.12)')
+  g.addColorStop(0.7, COLORS.hubFill)
+  g.addColorStop(1, 'rgba(0, 240, 255, 0.02)')
   ctx.beginPath()
-  ctx.arc(ARENA_CX, ARENA_CY, 14, 0, Math.PI * 2)
-  ctx.fillStyle = hexAlpha(COLORS.magenta, 0.35)
+  ctx.arc(ARENA_CX, ARENA_CY, hubR, 0, Math.PI * 2)
+  ctx.fillStyle = g
+  ctx.fill()
+
+  ctx.beginPath()
+  ctx.arc(ARENA_CX, ARENA_CY, hubR, 0, Math.PI * 2)
+  ctx.strokeStyle = COLORS.hubStroke
+  ctx.lineWidth = 1.5
+  ctx.setLineDash([5, 7])
+  ctx.stroke()
+  ctx.setLineDash([])
+
+  // Pivot core
+  ctx.beginPath()
+  ctx.arc(ARENA_CX, ARENA_CY, 10, 0, Math.PI * 2)
+  ctx.fillStyle = hexAlpha(COLORS.magenta, 0.4)
   ctx.fill()
   ctx.strokeStyle = COLORS.cyan
   ctx.lineWidth = 2
   ctx.stroke()
 }
 
-function drawRing(ctx: CanvasRenderingContext2D) {
-  ctx.beginPath()
-  ctx.arc(ARENA_CX, ARENA_CY, RING_RADIUS, 0, Math.PI * 2)
-  ctx.strokeStyle = COLORS.ring
-  ctx.lineWidth = 2
-  ctx.setLineDash([6, 10])
-  ctx.stroke()
-  ctx.setLineDash([])
-}
-
 function drawSafeWedgesHint(ctx: CanvasRenderingContext2D, beams: LaserBeam[]) {
   if (beams.length === 0) return
-  // Soft danger glow under beams
   for (const beam of beams) {
     const half = Math.max(0.035, beam.halfWidth)
+    const hubR = ARENA_RADIUS * beam.hubClear
+    const outer = ARENA_RADIUS * Math.max(0.35, beam.length)
     ctx.beginPath()
-    ctx.moveTo(ARENA_CX, ARENA_CY)
-    ctx.arc(
-      ARENA_CX,
-      ARENA_CY,
-      ARENA_RADIUS * Math.max(0.35, beam.length),
-      beam.angle - half,
-      beam.angle + half,
-    )
+    ctx.arc(ARENA_CX, ARENA_CY, outer, beam.angle - half, beam.angle + half)
+    ctx.arc(ARENA_CX, ARENA_CY, hubR, beam.angle + half, beam.angle - half, true)
     ctx.closePath()
     const alpha = 0.1 + beam.pulse * 0.14
     ctx.fillStyle = hexAlpha(beam.color, alpha)
@@ -222,33 +237,50 @@ function drawSafeWedgesHint(ctx: CanvasRenderingContext2D, beams: LaserBeam[]) {
 }
 
 function drawBeam(ctx: CanvasRenderingContext2D, beam: LaserBeam) {
+  const hubR = ARENA_RADIUS * beam.hubClear
   const len = ARENA_RADIUS * Math.max(0.2, beam.length)
-  const tipX = ARENA_CX + Math.cos(beam.angle) * len
-  const tipY = ARENA_CY + Math.sin(beam.angle) * len
-  const glow = 0.65 + beam.pulse * 0.45
+  const cos = Math.cos(beam.angle)
+  const sin = Math.sin(beam.angle)
+  const hubX = ARENA_CX + cos * hubR
+  const hubY = ARENA_CY + sin * hubR
+  const tipX = ARENA_CX + cos * len
+  const tipY = ARENA_CY + sin * len
+  const glow = 0.65 + beam.pulse * 0.45 + beam.telegraph * 0.2
   const lethal = beam.length >= 0.72
 
   ctx.save()
-  ctx.strokeStyle = hexAlpha(beam.color, (lethal ? 0.28 : 0.16) * glow)
+
+  // Dim ghost inside hub (not lethal)
+  if (hubR > 8) {
+    ctx.strokeStyle = hexAlpha(beam.color, 0.12 * glow)
+    ctx.lineWidth = 10 + beam.halfWidth * 40
+    ctx.lineCap = 'round'
+    ctx.beginPath()
+    ctx.moveTo(ARENA_CX, ARENA_CY)
+    ctx.lineTo(hubX, hubY)
+    ctx.stroke()
+  }
+
+  // Lethal segment outside hub
+  ctx.strokeStyle = hexAlpha(beam.color, (lethal ? 0.3 : 0.18) * glow)
   ctx.lineWidth = 22 + beam.halfWidth * 100
   ctx.lineCap = 'round'
   ctx.beginPath()
-  ctx.moveTo(ARENA_CX, ARENA_CY)
+  ctx.moveTo(hubX, hubY)
   ctx.lineTo(tipX, tipY)
   ctx.stroke()
 
   ctx.strokeStyle = hexAlpha(beam.color, (lethal ? 0.95 : 0.7) * glow)
   ctx.lineWidth = 4.5 + beam.halfWidth * 28
   ctx.beginPath()
-  ctx.moveTo(ARENA_CX, ARENA_CY)
+  ctx.moveTo(hubX, hubY)
   ctx.lineTo(tipX, tipY)
   ctx.stroke()
 
-  // Hot core
   ctx.strokeStyle = `rgba(255,255,255,${lethal ? 0.55 : 0.3})`
   ctx.lineWidth = 1.6
   ctx.beginPath()
-  ctx.moveTo(ARENA_CX, ARENA_CY)
+  ctx.moveTo(hubX, hubY)
   ctx.lineTo(tipX, tipY)
   ctx.stroke()
 
@@ -261,39 +293,53 @@ function drawBeam(ctx: CanvasRenderingContext2D, beam: LaserBeam) {
 }
 
 function drawDodger(ctx: CanvasRenderingContext2D, dodger: Dodger, rivalry: boolean) {
-  // Trail
-  for (let i = 0; i < dodger.trail.length; i++) {
-    const t = dodger.trail[i]
-    const p = ringPoint(t)
-    const a = ((i + 1) / dodger.trail.length) * 0.35
+  const trail = dodger.trail
+  for (let i = 0; i < trail.length; i++) {
+    const p = trail[i]
+    const a = ((i + 1) / trail.length) * 0.4
     ctx.beginPath()
-    ctx.arc(p.x, p.y, 5, 0, Math.PI * 2)
+    ctx.arc(p.x, p.y, dodger.radius * 0.45, 0, Math.PI * 2)
     ctx.fillStyle = hexAlpha(dodger.color, a)
     ctx.fill()
   }
 
-  const pos = ringPoint(dodger.angle)
-  const r = 11
+  // Dash afterimage
+  if (dodger.dash > 0) {
+    const speed = Math.hypot(dodger.vx, dodger.vy) || 1
+    const ux = dodger.vx / speed
+    const uy = dodger.vy / speed
+    for (let k = 1; k <= 3; k++) {
+      const ax = dodger.x - ux * k * 10
+      const ay = dodger.y - uy * k * 10
+      ctx.beginPath()
+      ctx.arc(ax, ay, dodger.radius * (1 - k * 0.12), 0, Math.PI * 2)
+      ctx.fillStyle = hexAlpha(dodger.color, 0.22 / k)
+      ctx.fill()
+    }
+  }
+
+  const r = dodger.radius
 
   if (rivalry) {
     ctx.beginPath()
-    ctx.arc(pos.x, pos.y, r + 8, 0, Math.PI * 2)
+    ctx.arc(dodger.x, dodger.y, r + 8, 0, Math.PI * 2)
     ctx.strokeStyle = hexAlpha('#ffffff', 0.45)
     ctx.lineWidth = 2
     ctx.stroke()
   }
 
   ctx.beginPath()
-  ctx.arc(pos.x, pos.y, r + 3, 0, Math.PI * 2)
+  ctx.arc(dodger.x, dodger.y, r + 3, 0, Math.PI * 2)
   ctx.fillStyle = hexAlpha(dodger.color, 0.25)
   ctx.fill()
 
   ctx.beginPath()
-  ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2)
+  ctx.arc(dodger.x, dodger.y, r, 0, Math.PI * 2)
   ctx.fillStyle = dodger.color
   ctx.fill()
-  ctx.strokeStyle = 'rgba(255,255,255,0.55)'
-  ctx.lineWidth = 2
+  ctx.strokeStyle =
+    dodger.dash > 0 ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.55)'
+  ctx.lineWidth = dodger.dash > 0 ? 2.5 : 2
   ctx.stroke()
 }
 
@@ -314,15 +360,14 @@ function drawFlash(ctx: CanvasRenderingContext2D, flash: ImpactFlash) {
 }
 
 function drawNameTag(ctx: CanvasRenderingContext2D, dodger: Dodger) {
-  const pos = ringPoint(dodger.angle)
   const label = PLAYER_PROFILES.find((p) => p.id === dodger.id)?.label ?? dodger.id
   ctx.font = `700 11px ${FONT}`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'bottom'
   ctx.fillStyle = 'rgba(0,0,0,0.45)'
-  ctx.fillText(label, pos.x + 1, pos.y - 16)
+  ctx.fillText(label, dodger.x + 1, dodger.y - dodger.radius - 6)
   ctx.fillStyle = '#f4ecff'
-  ctx.fillText(label, pos.x, pos.y - 17)
+  ctx.fillText(label, dodger.x, dodger.y - dodger.radius - 7)
 }
 
 function drawAlivePips(ctx: CanvasRenderingContext2D, dodgers: Dodger[]) {
