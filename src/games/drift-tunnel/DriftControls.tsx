@@ -41,6 +41,38 @@ export function DriftControls({ shell }: GameControlsProps) {
 
       <p className="drift-hint">{drift.hint}</p>
 
+      {drift.mode === 'infinite' && (
+        <section className="drift-seed-controls" aria-label="Infinite seed controls">
+          <div className="drift-seed-current">
+            <span>Current seed</span>
+            <code>{snap.seedLabel}</code>
+            <button type="button" className="btn" onClick={() => drift.replaySeed()}>
+              Replay
+            </button>
+          </div>
+          <div className="drift-seed-input">
+            <input
+              type="text"
+              value={drift.seedInput}
+              placeholder="Enter any seed or phrase"
+              aria-label="Custom Infinite seed"
+              onChange={(event) => drift.setSeedInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') drift.runSeed()
+              }}
+            />
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={!drift.seedInput.trim()}
+              onClick={() => drift.runSeed()}
+            >
+              Run seed
+            </button>
+          </div>
+        </section>
+      )}
+
       {drift.mode === 'explore' ? (
         <section className="drift-leaderboard" aria-label={`${snap.levelName} best times`}>
           <h3>Local best times</h3>

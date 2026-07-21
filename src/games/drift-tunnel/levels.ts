@@ -25,19 +25,29 @@ function repeat(section: Ring[], times: number): Ring[] {
     .map((r) => ring(r[0].kind, r[1].kind, r[2].kind, r[3].kind))
 }
 
+function boostOn(face: 0 | 1 | 2 | 3): Ring {
+  const kinds: TileKind[] = ['solid', 'solid', 'solid', 'solid']
+  kinds[face] = 'boost'
+  return ring(kinds[0], kinds[1], kinds[2], kinds[3])
+}
+
 const LEVELS: ExploreLevel[] = [
   {
     name: 'Warmup',
     hint: 'Auto-run. Jump gaps. Lean into walls to flip gravity.',
     rings: [
-      ...pad(20),
+      ...pad(8),
+      boostOn(0),
+      ...pad(11),
       ...stretch(gapOn(0), 2),
       ...pad(4),
       ...stretch(gapOn(0), 2),
       ...pad(6),
       ...stretch(gapOn(0), 3),
       ...repeat([...pad(4), ...stretch(gapOn(0), 2)], 4),
-      ...pad(5),
+      ...pad(2),
+      boostOn(1),
+      ...pad(2),
       ...stretch(gapOn(0), 4),
       ...pad(8),
     ],
@@ -46,7 +56,9 @@ const LEVELS: ExploreLevel[] = [
     name: 'Wall Walk',
     hint: 'Hold right near the edge to flip onto the wall.',
     rings: [
-      ...pad(6),
+      ...pad(3),
+      boostOn(3),
+      ...pad(2),
       ...stretch(gapOn(0), 5),
       ...pad(2),
       ...stretch(ring('gap', 'solid', 'solid', 'solid'), 6),
@@ -69,14 +81,18 @@ const LEVELS: ExploreLevel[] = [
         ],
         2,
       ),
-      ...pad(8),
+      ...pad(3),
+      boostOn(2),
+      ...pad(4),
     ],
   },
   {
     name: 'Ceiling Hop',
     hint: 'Flip twice to run on the ceiling past long floor gaps.',
     rings: [
-      ...pad(5),
+      ...pad(2),
+      boostOn(2),
+      ...pad(2),
       ...stretch(ring('gap', 'solid', 'solid', 'solid'), 4),
       ...stretch(ring('gap', 'gap', 'solid', 'solid'), 5),
       ...stretch(ring('gap', 'gap', 'solid', 'gap'), 4),
@@ -99,14 +115,18 @@ const LEVELS: ExploreLevel[] = [
         ],
         2,
       ),
-      ...pad(8),
+      ...pad(3),
+      boostOn(1),
+      ...pad(4),
     ],
   },
   {
     name: 'Crackle',
     hint: 'Crumble tiles break after you leave them — keep moving.',
     rings: [
-      ...pad(5),
+      ...pad(2),
+      boostOn(1),
+      ...pad(2),
       ...stretch(ring('crumble', 'solid', 'solid', 'solid'), 8),
       ...pad(1),
       ...stretch(ring('crumble', 'crumble', 'solid', 'solid'), 6),
@@ -142,14 +162,18 @@ const LEVELS: ExploreLevel[] = [
         ],
         3,
       ),
-      ...pad(8),
+      ...pad(3),
+      boostOn(3),
+      ...pad(4),
     ],
   },
   {
     name: 'Ice Slide',
     hint: 'Ice makes strafing slippery. Commit early to flips.',
     rings: [
-      ...pad(4),
+      ...pad(2),
+      boostOn(3),
+      ...pad(1),
       ...stretch(ring('ice', 'ice', 'solid', 'solid'), 6),
       ...stretch(ring('ice', 'gap', 'solid', 'ice'), 5),
       ...pad(1),
@@ -182,14 +206,18 @@ const LEVELS: ExploreLevel[] = [
         ],
         2,
       ),
-      ...pad(8),
+      ...pad(3),
+      boostOn(0),
+      ...pad(4),
     ],
   },
   {
     name: 'Boost Ring',
     hint: 'Neon boost pads surge your speed — brace for gaps.',
     rings: [
-      ...pad(4),
+      ...pad(2),
+      boostOn(1),
+      ...pad(1),
       ...stretch(ring('boost', 'solid', 'solid', 'solid'), 3),
       ...pad(1),
       ...stretch(gapOn(0), 4),
@@ -215,14 +243,18 @@ const LEVELS: ExploreLevel[] = [
         ],
         3,
       ),
-      ...pad(8),
+      ...pad(3),
+      boostOn(2),
+      ...pad(4),
     ],
   },
   {
     name: 'Spiral',
     hint: 'Gaps rotate around the tunnel — flip with the pattern.',
     rings: [
-      ...pad(4),
+      ...pad(2),
+      boostOn(1),
+      ...pad(1),
       ...stretch(gapOn(0), 2),
       ...stretch(gapOn(1), 2),
       ...stretch(gapOn(2), 2),
@@ -253,14 +285,18 @@ const LEVELS: ExploreLevel[] = [
         ],
         2,
       ),
-      ...pad(8),
+      ...pad(3),
+      boostOn(3),
+      ...pad(4),
     ],
   },
   {
     name: 'Thin Path',
     hint: 'Two faces stay open at a time. Move onto the overlap before it rotates.',
     rings: [
-      ...pad(6),
+      ...pad(3),
+      boostOn(2),
+      ...pad(2),
       ...repeat(
         [
           // Adjacent safe faces overlap, giving a readable transition window.
@@ -272,14 +308,18 @@ const LEVELS: ExploreLevel[] = [
         ],
         3,
       ),
-      ...pad(8),
+      ...pad(3),
+      boostOn(0),
+      ...pad(4),
     ],
   },
   {
     name: 'Mixed Signal',
     hint: 'Ice, crumble, and boost in one conduit.',
     rings: [
-      ...pad(3),
+      ...pad(1),
+      boostOn(3),
+      ...pad(1),
       ...stretch(ring('ice', 'solid', 'crumble', 'solid'), 3),
       ...stretch(ring('gap', 'boost', 'solid', 'ice'), 3),
       ...stretch(ring('crumble', 'gap', 'ice', 'solid'), 4),
@@ -294,14 +334,17 @@ const LEVELS: ExploreLevel[] = [
         ],
         3,
       ),
-      ...pad(8),
+      ...pad(3),
+      boostOn(1),
+      ...pad(4),
     ],
   },
   {
     name: 'Void Gate',
     hint: 'Final explore run. Flip hard. Don’t hesitate.',
     rings: [
-      ...pad(3),
+      ...pad(2),
+      boostOn(1),
       ...stretch(ring('boost', 'solid', 'solid', 'solid'), 1),
       ...stretch(ring('gap', 'solid', 'gap', 'solid'), 3),
       ...stretch(ring('gap', 'gap', 'solid', 'ice'), 4),

@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import type { GameViewProps } from '../../shared/module'
 import { DriftCanvas } from './DriftCanvas'
 import { useDriftTunnel } from './DriftSession'
@@ -35,11 +35,17 @@ export function DriftGameView({ shell }: GameViewProps) {
           </span>
         ) : (
           <span>
-            {Math.floor(snap.distance)}m · {formatRunTime(snap.elapsed)} ·{' '}
-            {formatScore(snap.score)} pts
+            {Math.floor(snap.distance)}m · {formatRunTime(snap.elapsed)}
           </span>
         )}
-        {snap.boostT > 0 && <span className="drift-hud__boost">BOOST</span>}
+        <span className="drift-hud__status">
+          {snap.mode === 'explore' && snap.hasGhost && (
+            <span className="drift-hud__ghost">
+              PB GHOST · {formatRunTime(snap.ghostTime)}
+            </span>
+          )}
+          {snap.boostT > 0 && <span className="drift-hud__boost">BOOST</span>}
+        </span>
       </div>
 
       {snap.phase === 'idle' && (
@@ -56,11 +62,22 @@ export function DriftGameView({ shell }: GameViewProps) {
       {snap.phase === 'failed' && (
         <div className="drift-overlay">
           <span className="drift-overlay__title">Into the void</span>
-          <span className="drift-overlay__sub">
-            {snap.mode === 'infinite'
-              ? `${Math.floor(snap.distance)}m · ${formatRunTime(snap.elapsed)} · ${formatScore(snap.score)} pts`
-              : `${snap.levelName} · ${formatRunTime(snap.elapsed)}`}
-          </span>
+          {snap.mode === 'infinite' ? (
+            <>
+              <span className="drift-overlay__sub">
+                {Math.floor(snap.distance)}m · {formatRunTime(snap.elapsed)}
+              </span>
+              <InfiniteScoreReveal
+                distance={snap.distance}
+                elapsed={snap.elapsed}
+                score={snap.score}
+              />
+            </>
+          ) : (
+            <span className="drift-overlay__sub">
+              {snap.levelName} · {formatRunTime(snap.elapsed)}
+            </span>
+          )}
           <button type="button" className="btn btn--primary" onClick={() => drift.retry()}>
             Retry
           </button>
@@ -130,6 +147,46 @@ export function DriftGameView({ shell }: GameViewProps) {
           />
         </div>
       )}
+    </div>
+  )
+}
+
+function InfiniteScoreReveal({
+  distance,
+  elapsed,
+  score,
+}: {
+  distance: number
+  elapsed: number
+  score: number
+}) {
+  const [displayScore, setDisplayScore] = useState(0)
+  const [done, setDone] = useState(false)
+
+  useEffect(() => {
+    let raf = 0
+    const delay = 280
+    const duration = 1450
+    const started = performance.now()
+    const frame = (now: number) => {
+      const progress = Math.max(0, Math.min(1, (now - started - delay) / duration))
+      const eased = 1 - Math.pow(1 - progress, 3)
+      setDisplayScore(Math.floor(score * eased))
+      if (progress < 1) raf = requestAnimationFrame(frame)
+      else setDone(true)
+    }
+    raf = requestAnimationFrame(frame)
+    return () => cancelAnimationFrame(raf)
+  }, [score])
+
+  const averageSpeed = elapsed > 0 ? distance / elapsed : 0
+  return (
+    <div className={`drift-score-reveal ${done ? 'drift-score-reveal--done' : ''}`}>
+      <span className="drift-score-reveal__formula">
+        {distance.toFixed(1)}m × {averageSpeed.toFixed(2)} speed × 10
+      </span>
+      <strong>{formatScore(displayScore)}</strong>
+      <span>score</span>
     </div>
   )
 }

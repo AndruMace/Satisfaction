@@ -32,6 +32,20 @@ export type InfiniteRunRecord = {
   score: number
 }
 
+/** Compact 10 Hz pose: elapsed, distance, face, lateral, height. */
+export type GhostSample = [
+  elapsed: number,
+  distance: number,
+  face: FaceIndex,
+  lateral: number,
+  height: number,
+]
+
+export type ExploreGhostRun = {
+  elapsed: number
+  samples: GhostSample[]
+}
+
 export type DriftSnapshot = {
   phase: DriftPhase
   mode: DriftMode
@@ -45,6 +59,9 @@ export type DriftSnapshot = {
   levelTimes: number[]
   distanceLeaders: InfiniteRunRecord[]
   scoreLeaders: InfiniteRunRecord[]
+  hasGhost: boolean
+  ghostTime: number
+  seedLabel: string
   speed: number
   face: FaceIndex
   boostT: number

@@ -17,6 +17,7 @@ import {
   resetRun,
   setSpeedPreset,
   snapshot,
+  startInfiniteSeed,
   startRun,
   switchMode,
   type DriftWorld,
@@ -33,10 +34,14 @@ export type DriftSession = {
   resetKey: number
   mode: DriftMode
   speedPreset: SpeedPreset
+  seedInput: string
+  setSeedInput: (value: string) => void
   setMode: (mode: DriftMode) => void
   setSpeed: (preset: SpeedPreset) => void
   launch: () => void
   retry: () => void
+  runSeed: () => void
+  replaySeed: () => void
   goNext: () => void
   goPrev: () => void
   levelTotal: number
@@ -53,6 +58,7 @@ export function DriftTunnelProvider({ children }: { children: ReactNode }) {
   const [resetKey, setResetKey] = useState(0)
   const [mode, setModeState] = useState<DriftMode>('explore')
   const [speedPreset, setSpeedState] = useState<SpeedPreset>('normal')
+  const [seedInput, setSeedInput] = useState('')
 
   const bump = useCallback(() => {
     setSnap(snapshot(worldRef.current))
@@ -87,6 +93,23 @@ export function DriftTunnelProvider({ children }: { children: ReactNode }) {
     bump()
   }, [bump])
 
+  const runSeed = useCallback(() => {
+    const value = seedInput.trim()
+    if (!value) return
+    startInfiniteSeed(worldRef.current, value)
+    setModeState('infinite')
+    bump()
+  }, [seedInput, bump])
+
+  const replaySeed = useCallback(() => {
+    const value = worldRef.current.seedLabel
+    if (!value) return
+    startInfiniteSeed(worldRef.current, value)
+    setModeState('infinite')
+    setSeedInput(value)
+    bump()
+  }, [bump])
+
   const goNext = useCallback(() => {
     nextLevel(worldRef.current)
     setModeState('explore')
@@ -110,10 +133,14 @@ export function DriftTunnelProvider({ children }: { children: ReactNode }) {
       resetKey,
       mode,
       speedPreset,
+      seedInput,
+      setSeedInput,
       setMode,
       setSpeed,
       launch,
       retry,
+      runSeed,
+      replaySeed,
       goNext,
       goPrev,
       levelTotal: exploreLevelTotal(),
@@ -125,10 +152,13 @@ export function DriftTunnelProvider({ children }: { children: ReactNode }) {
       resetKey,
       mode,
       speedPreset,
+      seedInput,
       setMode,
       setSpeed,
       launch,
       retry,
+      runSeed,
+      replaySeed,
       goNext,
       goPrev,
     ],

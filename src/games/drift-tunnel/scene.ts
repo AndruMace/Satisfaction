@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { createDriftCamera, type DriftCamera } from './camera'
-import { playerWorldPos, type DriftWorld } from './sim'
+import { ghostWorldPos, playerWorldPos, type DriftWorld } from './sim'
 import {
   FACE_LATERAL,
   FACE_OUTWARD,
@@ -185,6 +185,23 @@ export function createDriftScene(canvas: HTMLCanvasElement): DriftScene {
   runner.scale.set(0.9, 0.9, 1)
   scene.add(runner)
 
+  const ghostMaterial = new THREE.SpriteMaterial({
+    map: mascotBackTexture,
+    color: 0x74eaff,
+    opacity: 0.42,
+    transparent: true,
+    depthTest: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    toneMapped: false,
+  })
+  const ghost = new THREE.Sprite(ghostMaterial)
+  ghost.scale.set(0.76, 0.76, 1)
+  ghost.renderOrder = 2
+  ghost.visible = false
+  scene.add(ghost)
+  runner.renderOrder = 3
+
   function sync(world: DriftWorld) {
     activeTiles = 0
     activeEdges = 0
@@ -244,6 +261,20 @@ export function createDriftScene(canvas: HTMLCanvasElement): DriftScene {
     runner.scale.set((0.9 * turnWidth) / squash, 0.9 * squash, 1)
     mascotMaterial.rotation = world.falling ? Math.sin(world.z * 3) * 0.3 : 0
 
+    const ghostPose = ghostWorldPos(world)
+    ghost.visible = ghostPose !== null
+    if (ghostPose) {
+      const ghostUp = new THREE.Vector3(...ghostPose.up)
+      const ghostRight = new THREE.Vector3(...ghostPose.right)
+      ghost.position
+        .set(ghostPose.x, ghostPose.y, ghostPose.z)
+        .addScaledVector(ghostUp, 0.38)
+        .addScaledVector(ghostRight, 0.48)
+      const pulse = 0.96 + Math.sin(world.elapsed * 7) * 0.04
+      ghost.scale.set(0.76 * pulse, 0.76 * pulse, 1)
+      ghostMaterial.opacity = 0.46 + Math.sin(world.elapsed * 5) * 0.07
+    }
+
     rim.position.set(p.x, p.y, p.z + 2)
     accent.position.set(p.x, p.y, p.z + 10)
 
@@ -281,6 +312,7 @@ export function createDriftScene(canvas: HTMLCanvasElement): DriftScene {
       mascotFrontTexture.dispose()
       mascotBackTexture.dispose()
       mascotMaterial.dispose()
+      ghostMaterial.dispose()
       renderer.dispose()
     },
   }
@@ -337,7 +369,7 @@ function createMascotTexture(showBack: boolean): THREE.CanvasTexture {
   ctx.stroke()
 
   if (showBack) {
-    // Back tuft, jacket seam, and tiny star patch make the reverse readable.
+    // Back tuft and center seam make the reverse readable.
     ctx.fillStyle = '#ff9d2e'
     ctx.beginPath()
     ctx.moveTo(111, 51)
@@ -349,22 +381,14 @@ function createMascotTexture(showBack: boolean): THREE.CanvasTexture {
     ctx.lineWidth = 5
     ctx.beginPath()
     ctx.moveTo(128, 66)
-    ctx.lineTo(128, 185)
+    ctx.lineTo(128, 139)
     ctx.stroke()
-    ctx.fillStyle = '#5947ff'
-    ctx.strokeStyle = '#ffffff'
+
+    ctx.strokeStyle = '#a9512b'
     ctx.lineWidth = 4
     ctx.beginPath()
-    for (let i = 0; i < 10; i++) {
-      const angle = -Math.PI / 2 + (i * Math.PI) / 5
-      const radius = i % 2 === 0 ? 18 : 8
-      const x = 128 + Math.cos(angle) * radius
-      const y = 126 + Math.sin(angle) * radius
-      if (i === 0) ctx.moveTo(x, y)
-      else ctx.lineTo(x, y)
-    }
-    ctx.closePath()
-    ctx.fill()
+    ctx.moveTo(128, 153)
+    ctx.quadraticCurveTo(124, 170, 128, 184)
     ctx.stroke()
   } else {
     // Big expressive eyes.
