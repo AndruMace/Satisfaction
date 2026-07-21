@@ -3,14 +3,17 @@ import { generateChunk, nextSeed } from './procedural'
 import { cloneRings, getTile, isWalkable, solidRing } from './tunnel'
 import {
   BASE_SPEED,
+  BOOST_DECAY_DURATION,
   BOOST_DURATION,
   BOOST_MULT,
+  COYOTE_TIME,
   FACE_LATERAL,
   FACE_OUTWARD,
   FLIP_EDGE,
   GRAVITY,
   ICE_ACCEL,
   ICE_FRICTION,
+  JUMP_BUFFER_TIME,
   JUMP_VELOCITY,
   RING_DEPTH,
   STRAFE_ACCEL,
@@ -39,6 +42,8 @@ const GHOST_SAMPLE_INTERVAL = 0.1
 const MAX_GHOST_SAMPLES = 18_000
 /** Collision-only ledge extending 10% of a tile into either edge of a gap. */
 const SUPPORT_OVERHANG = RING_DEPTH * 0.1
+/** Keep swept movement shorter than the narrowest collision feature. */
+const MAX_PHYSICS_STEP = SUPPORT_OVERHANG * 0.5
 
 export type DriftWorld = {
   mode: DriftMode
@@ -57,6 +62,11 @@ export type DriftWorld = {
   speed: number
   speedPreset: SpeedPreset
   boostT: number
+  boostStacks: number
+  boostPower: number
+  boostDecayT: number
+  boostDecayFrom: number
+  boostSegmentsHit: Set<string>
   flipCooldown: number
   alive: boolean
   distance: number
@@ -73,7 +83,8 @@ export type DriftWorld = {
   ghostSampleAccumulator: number
   ghostRun: ExploreGhostRun | null
   ghostCursor: number
-  jumpBuffered: boolean
+  jumpBufferT: number
+  coyoteT: number
   jumpHeld: boolean
   wasGrounded: boolean
   falling: boolean
@@ -265,6 +276,13 @@ function baseSpeed(preset: SpeedPreset): number {
   return BASE_SPEED[preset]
 }
 
+function boostedSpeed(world: DriftWorld): number {
+  return (
+    baseSpeed(world.speedPreset) *
+    (1 + (BOOST_MULT - 1) * world.boostPower)
+  )
+}
+
 export function createWorld(
   mode: DriftMode = 'explore',
   levelIndex = 0,
@@ -287,6 +305,11 @@ export function createWorld(
     speed: baseSpeed(speedPreset),
     speedPreset,
     boostT: 0,
+    boostStacks: 0,
+    boostPower: 0,
+    boostDecayT: 0,
+    boostDecayFrom: 0,
+    boostSegmentsHit: new Set(),
     flipCooldown: 0,
     alive: true,
     distance: 0,
@@ -303,7 +326,8 @@ export function createWorld(
     ghostSampleAccumulator: 0,
     ghostRun: null,
     ghostCursor: 0,
-    jumpBuffered: false,
+    jumpBufferT: 0,
+    coyoteT: COYOTE_TIME,
     jumpHeld: false,
     wasGrounded: true,
     falling: false,
@@ -332,6 +356,11 @@ export function resetRun(
   world.vLateral = 0
   world.speed = baseSpeed(world.speedPreset)
   world.boostT = 0
+  world.boostStacks = 0
+  world.boostPower = 0
+  world.boostDecayT = 0
+  world.boostDecayFrom = 0
+  world.boostSegmentsHit.clear()
   world.flipCooldown = 0
   world.alive = true
   world.distance = 0
@@ -341,7 +370,8 @@ export function resetRun(
   world.ghostSampleAccumulator = 0
   world.ghostRun = null
   world.ghostCursor = 0
-  world.jumpBuffered = false
+  world.jumpBufferT = 0
+  world.coyoteT = COYOTE_TIME
   world.jumpHeld = false
   world.wasGrounded = true
   world.falling = false
@@ -376,7 +406,8 @@ export function resetRun(
 
 export function setSpeedPreset(world: DriftWorld, preset: SpeedPreset) {
   world.speedPreset = preset
-  if (world.boostT <= 0) world.speed = baseSpeed(preset)
+  world.speed =
+    world.boostPower > 0 ? boostedSpeed(world) : baseSpeed(world.speedPreset)
 }
 
 export function startRun(world: DriftWorld) {
@@ -450,10 +481,6 @@ function supportAt(
   return null
 }
 
-function hasSupport(world: DriftWorld, z = world.z, face = world.face): boolean {
-  return supportAt(world, z, face) !== null
-}
-
 function ensureStream(world: DriftWorld) {
   if (world.mode !== 'infinite') return
   const playerRing = Math.floor(world.z / RING_DEPTH)
@@ -490,6 +517,7 @@ function tryFlip(world: DriftWorld, input: DriftInput): boolean {
     world.vHeight = 0
     world.supportRing = support.absRing
     world.supportFace = nextFace
+    world.coyoteT = COYOTE_TIME
     return true
   } else if (input.right && world.lateral <= -FLIP_EDGE) {
     const nextFace = ((world.face + 3) % 4) as FaceIndex
@@ -504,16 +532,50 @@ function tryFlip(world: DriftWorld, input: DriftInput): boolean {
     world.vHeight = 0
     world.supportRing = support.absRing
     world.supportFace = nextFace
+    world.coyoteT = COYOTE_TIME
     return true
   }
   return false
 }
 
+function boostSegmentKey(world: DriftWorld, support: SupportInfo): string {
+  const face = world.face
+  let start = support.absRing
+  let end = support.absRing
+
+  while (
+    getTile(world.rings, start - 1 - world.ringOffset, face)?.kind === 'boost'
+  ) {
+    start--
+  }
+  while (
+    getTile(world.rings, end + 1 - world.ringOffset, face)?.kind === 'boost'
+  ) {
+    end++
+  }
+  return `${face}:${start}:${end}`
+}
+
 function applyTileEffects(world: DriftWorld, support: SupportInfo | null) {
   if (!support) return
 
-  if (support.tile.kind === 'boost' && world.boostT <= 0) {
-    world.boostT = BOOST_DURATION
+  if (support.tile.kind === 'boost') {
+    const segmentKey = boostSegmentKey(world, support)
+    if (!world.boostSegmentsHit.has(segmentKey)) {
+      if (world.boostT <= 0) {
+        world.boostStacks = 0
+        world.boostSegmentsHit.clear()
+      }
+      world.boostSegmentsHit.add(segmentKey)
+      world.boostStacks++
+      world.boostPower += 1
+      world.boostT = BOOST_DURATION
+      world.boostDecayT = 0
+      world.boostDecayFrom = 0
+      world.speed = boostedSpeed(world)
+    }
+  } else if (world.boostT <= 0 && world.boostPower <= 0) {
+    world.boostSegmentsHit.clear()
   }
   if (support.tile.kind === 'crumble') {
     support.tile.contacted = true
@@ -528,6 +590,14 @@ function leaveSupport(world: DriftWorld) {
   }
 }
 
+function canBeginBoostDecay(world: DriftWorld): boolean {
+  return (
+    !world.falling &&
+    world.height <= 0.001 &&
+    supportAt(world) !== null
+  )
+}
+
 export function stepWorld(world: DriftWorld, dt: number, input: DriftInput) {
   if (world.phase !== 'racing' || !world.alive) return
 
@@ -536,18 +606,54 @@ export function stepWorld(world: DriftWorld, dt: number, input: DriftInput) {
 
   if (world.flipCooldown > 0) world.flipCooldown -= clampedDt
   if (world.boostT > 0) {
-    world.boostT -= clampedDt
-    world.speed = baseSpeed(world.speedPreset) * BOOST_MULT
+    world.boostT = Math.max(0, world.boostT - clampedDt)
+    if (world.boostT > 0) {
+      world.speed = boostedSpeed(world)
+    } else {
+      world.boostStacks = 0
+      if (canBeginBoostDecay(world)) {
+        world.boostDecayFrom = world.boostPower
+        world.boostDecayT = 0
+      }
+      world.speed = boostedSpeed(world)
+    }
+  } else if (world.boostPower > 0) {
+    if (world.boostDecayFrom <= 0 && canBeginBoostDecay(world)) {
+      world.boostDecayFrom = world.boostPower
+      world.boostDecayT = 0
+    }
+    if (world.boostDecayFrom > 0) {
+      world.boostDecayT = Math.min(
+        BOOST_DECAY_DURATION,
+        world.boostDecayT + clampedDt,
+      )
+      const t = world.boostDecayT / BOOST_DECAY_DURATION
+      const smooth = t * t * (3 - 2 * t)
+      world.boostPower = world.boostDecayFrom * (1 - smooth)
+      if (world.boostDecayT >= BOOST_DECAY_DURATION) {
+        world.boostPower = 0
+        world.boostDecayFrom = 0
+        world.boostSegmentsHit.clear()
+      }
+      world.speed =
+        world.boostPower > 0
+          ? boostedSpeed(world)
+          : baseSpeed(world.speedPreset)
+    } else {
+      // Preserve the full boost while airborne; decay starts after landing.
+      world.speed = boostedSpeed(world)
+    }
   } else {
+    world.boostStacks = 0
     world.speed = baseSpeed(world.speedPreset)
   }
 
-  // Buffer only the rising edge. Holding jump can never rescue a missed gap.
-  if (input.jump && !world.jumpHeld) world.jumpBuffered = true
+  // Buffer the rising edge briefly so render/input timing cannot lose a jump.
+  if (input.jump && !world.jumpHeld) world.jumpBufferT = JUMP_BUFFER_TIME
   world.jumpHeld = input.jump
 
-  // Substeps prevent fast/boost mode from skipping narrow gap rings.
-  const steps = Math.max(1, Math.ceil((world.speed * clampedDt) / (RING_DEPTH * 0.25)))
+  // Substeps prevent fast/boost mode from skipping the support lips at gaps.
+  const steps = Math.max(1, Math.ceil((world.speed * clampedDt) / MAX_PHYSICS_STEP))
   const stepDt = clampedDt / steps
   for (let step = 0; step < steps; step++) {
     world.elapsed += stepDt
@@ -573,6 +679,16 @@ export function stepWorld(world: DriftWorld, dt: number, input: DriftInput) {
 
 function stepMotion(world: DriftWorld, dt: number, input: DriftInput) {
   if (world.falling) {
+    world.jumpBufferT = Math.max(0, world.jumpBufferT - dt)
+    world.coyoteT = Math.max(0, world.coyoteT - dt)
+    if (world.jumpBufferT > 0 && world.coyoteT > 0) {
+      world.falling = false
+      world.vHeight = JUMP_VELOCITY
+      world.height = 0.02
+      world.jumpBufferT = 0
+      world.coyoteT = 0
+      world.wasGrounded = false
+    }
     world.vHeight -= GRAVITY * dt
     world.height += world.vHeight * dt
     world.z += world.speed * dt
@@ -592,14 +708,50 @@ function stepMotion(world: DriftWorld, dt: number, input: DriftInput) {
   world.vLateral *= Math.exp(-friction * dt)
   world.lateral = Math.max(-0.5, Math.min(0.5, world.lateral + world.vLateral * dt))
 
-  tryFlip(world, input)
+  const flipped = tryFlip(world, input)
+  if (!flipped) {
+    // The mascot has visible width. Stop its center at the corner when there
+    // is no adjacent surface to receive a flip instead of clipping the wall.
+    if (world.lateral > FLIP_EDGE) {
+      world.lateral = FLIP_EDGE
+      world.vLateral = Math.min(0, world.vLateral)
+    } else if (world.lateral < -FLIP_EDGE) {
+      world.lateral = -FLIP_EDGE
+      world.vLateral = Math.max(0, world.vLateral)
+    }
+  }
 
-  const grounded = world.height <= 0.001 && hasSupport(world)
-  if (world.jumpBuffered && grounded) {
+  const currentSupport = world.height <= 0.001 ? supportAt(world) : null
+  const grounded = currentSupport !== null
+  const nearLeftFlip =
+    input.left &&
+    world.lateral >= FLIP_EDGE - 0.03 &&
+    supportAt(world, world.z, ((world.face + 1) % 4) as FaceIndex) !== null
+  const nearRightFlip =
+    input.right &&
+    world.lateral <= -FLIP_EDGE + 0.03 &&
+    supportAt(world, world.z, ((world.face + 3) % 4) as FaceIndex) !== null
+  const pendingFlip = !flipped && world.flipCooldown <= 0 && (nearLeftFlip || nearRightFlip)
+  if (grounded) {
+    world.coyoteT = COYOTE_TIME
+    // Contact effects happen before jump resolution, so jumping on the first
+    // frame of a boost/crumble tile still counts as touching that tile.
+    applyTileEffects(world, currentSupport)
+  } else {
+    world.coyoteT = Math.max(0, world.coyoteT - dt)
+  }
+  world.jumpBufferT = Math.max(0, world.jumpBufferT - dt)
+
+  if (
+    world.jumpBufferT > 0 &&
+    (grounded || world.coyoteT > 0) &&
+    !pendingFlip
+  ) {
     leaveSupport(world)
     world.vHeight = JUMP_VELOCITY
     world.height = 0.02
-    world.jumpBuffered = false
+    world.jumpBufferT = 0
+    world.coyoteT = 0
     world.wasGrounded = false
   }
 
@@ -618,14 +770,14 @@ function stepMotion(world: DriftWorld, dt: number, input: DriftInput) {
       }
       world.height = 0
       world.vHeight = 0
+      world.coyoteT = COYOTE_TIME
       world.wasGrounded = true
       applyTileEffects(world, support)
     } else {
-      // Missing a surface latches an irreversible fall. A later ring cannot
-      // snap the player back up and jump input is ignored.
+      // A missing surface starts a fall. Coyote time may still turn the first
+      // instant into a jump; after that, later rings cannot snap the player up.
       leaveSupport(world)
       world.falling = true
-      world.jumpBuffered = false
       world.wasGrounded = false
       world.vHeight = Math.min(world.vHeight, -1.5)
     }
@@ -674,6 +826,7 @@ export function snapshot(world: DriftWorld): DriftSnapshot {
     speed: world.speed,
     face: world.face,
     boostT: world.boostT,
+    boostStacks: world.boostStacks,
     alive: world.alive,
     ringsAhead: Math.max(0, world.rings.length - ringIndexAt(world, world.z)),
   }

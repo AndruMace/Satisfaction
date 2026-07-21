@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { playerWorldPos, type DriftWorld } from './sim'
-import { FACE_OUTWARD, type FaceIndex } from './types'
+import { BASE_SPEED, FACE_OUTWARD, type FaceIndex } from './types'
 
 export type DriftCamera = {
   camera: THREE.PerspectiveCamera
@@ -38,12 +38,19 @@ export function createDriftCamera(): DriftCamera {
     camera.lookAt(look)
   }
 
+  function targetFov(world: DriftWorld) {
+    const speedRatio = world.speed / BASE_SPEED[world.speedPreset]
+    return 58 + THREE.MathUtils.clamp(speedRatio - 1, 0, 3) * 5.5
+  }
+
   return {
     camera,
     reset(world) {
       compute(world)
       camera.position.copy(desiredPos)
       up.copy(desiredUp)
+      camera.fov = targetFov(world)
+      camera.updateProjectionMatrix()
       applyLook()
     },
     update(world, dt) {
@@ -52,6 +59,12 @@ export function createDriftCamera(): DriftCamera {
       const b = 1 - Math.exp(-8 * dt)
       camera.position.lerp(desiredPos, a)
       up.lerp(desiredUp, b).normalize()
+      camera.fov = THREE.MathUtils.lerp(
+        camera.fov,
+        targetFov(world),
+        1 - Math.exp(-5 * dt),
+      )
+      camera.updateProjectionMatrix()
       applyLook()
     },
   }

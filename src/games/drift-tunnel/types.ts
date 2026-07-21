@@ -65,6 +65,7 @@ export type DriftSnapshot = {
   speed: number
   face: FaceIndex
   boostT: number
+  boostStacks: number
   alive: boolean
   ringsAhead: number
 }
@@ -103,3 +104,7 @@ export const ICE_ACCEL = 18
 export const FLIP_EDGE = 0.4
 export const BOOST_DURATION = 1.35
 export const BOOST_MULT = 1.55
+export const BOOST_DECAY_DURATION = 0.75
+/** Forgiveness windows for input just before landing and just after leaving support. */
+export const JUMP_BUFFER_TIME = 0.12
+export const COYOTE_TIME = 0.1

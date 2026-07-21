@@ -10,6 +10,12 @@ function pickFace(seed: { v: number }): 0 | 1 | 2 | 3 {
   return (Math.floor(rand(seed) * 4) % 4) as 0 | 1 | 2 | 3
 }
 
+function boostRing(face: 0 | 1 | 2 | 3): Ring {
+  const kinds: TileKind[] = ['solid', 'solid', 'solid', 'solid']
+  kinds[face] = 'boost'
+  return ring(kinds[0]!, kinds[1]!, kinds[2]!, kinds[3]!)
+}
+
 function kindsForGapPattern(
   seed: { v: number },
   difficulty: number,
@@ -32,9 +38,10 @@ function kindsForGapPattern(
   for (let f = 0; f < 4; f++) {
     if (kinds[f] !== 'solid') continue
     const roll = rand(seed)
-    if (roll < 0.08 + difficulty * 0.02) kinds[f] = 'crumble'
-    else if (roll < 0.16 + difficulty * 0.02) kinds[f] = 'ice'
-    else if (roll < 0.2) kinds[f] = 'boost'
+    const crumbleChance = Math.min(0.2, 0.08 + difficulty * 0.015)
+    if (roll < crumbleChance) kinds[f] = 'crumble'
+    else if (roll < crumbleChance + 0.1) kinds[f] = 'ice'
+    else if (roll < crumbleChance + 0.22) kinds[f] = 'boost'
   }
 
   // Always keep at least one walkable face
@@ -66,8 +73,15 @@ export function generateChunk(
     // Every hazard gets a visible recovery/reading lane. This prevents
     // one- and two-tile gap noise from chaining back-to-back.
     const recoveryLength = 2 + Math.floor(rand(seed) * 3)
+    const recoveryBoost =
+      rand(seed) < 0.45 ? Math.floor(rand(seed) * recoveryLength) : -1
+    const recoveryBoostFace = pickFace(seed)
     for (let k = 0; k < recoveryLength && i < count; k++, i++) {
-      rings.push(ring('solid', 'solid', 'solid', 'solid'))
+      rings.push(
+        k === recoveryBoost
+          ? boostRing(recoveryBoostFace)
+          : ring('solid', 'solid', 'solid', 'solid'),
+      )
     }
     if (i >= count) break
 

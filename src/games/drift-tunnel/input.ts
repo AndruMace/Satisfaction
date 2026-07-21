@@ -11,23 +11,29 @@ export function createInputController(target: HTMLElement): InputController {
   const touch = { left: false, right: false, jump: false }
 
   const onKeyDown = (e: KeyboardEvent) => {
+    const captured =
+      e.code === 'ArrowLeft' ||
+      e.code === 'KeyA' ||
+      e.code === 'ArrowRight' ||
+      e.code === 'KeyD' ||
+      e.code === 'ArrowUp' ||
+      e.code === 'KeyW' ||
+      e.code === 'Space'
+    if (captured) e.preventDefault()
     if (e.repeat) return
     switch (e.code) {
       case 'ArrowLeft':
       case 'KeyA':
         keys.left = true
-        e.preventDefault()
         break
       case 'ArrowRight':
       case 'KeyD':
         keys.right = true
-        e.preventDefault()
         break
       case 'ArrowUp':
       case 'KeyW':
       case 'Space':
         keys.jump = true
-        e.preventDefault()
         break
     }
   }
@@ -37,15 +43,18 @@ export function createInputController(target: HTMLElement): InputController {
       case 'ArrowLeft':
       case 'KeyA':
         keys.left = false
+        e.preventDefault()
         break
       case 'ArrowRight':
       case 'KeyD':
         keys.right = false
+        e.preventDefault()
         break
       case 'ArrowUp':
       case 'KeyW':
       case 'Space':
         keys.jump = false
+        e.preventDefault()
         break
     }
   }

@@ -39,10 +39,12 @@ const LEVELS: ExploreLevel[] = [
       ...pad(8),
       boostOn(0),
       ...pad(11),
+      boostOn(0),
       ...stretch(gapOn(0), 2),
       ...pad(4),
       ...stretch(gapOn(0), 2),
       ...pad(6),
+      boostOn(0),
       ...stretch(gapOn(0), 3),
       ...repeat([...pad(4), ...stretch(gapOn(0), 2)], 4),
       ...pad(2),
@@ -62,7 +64,9 @@ const LEVELS: ExploreLevel[] = [
       ...stretch(gapOn(0), 5),
       ...pad(2),
       ...stretch(ring('gap', 'solid', 'solid', 'solid'), 6),
-      ...pad(3),
+      ...pad(1),
+      boostOn(1),
+      ...pad(1),
       ...stretch(ring('gap', 'solid', 'gap', 'solid'), 4),
       ...repeat(
         [
@@ -72,6 +76,9 @@ const LEVELS: ExploreLevel[] = [
         ],
         3,
       ),
+      ...pad(1),
+      boostOn(3),
+      ...pad(1),
       ...repeat(
         [
           ...stretch(ring('gap', 'solid', 'gap', 'solid'), 4),
@@ -97,6 +104,7 @@ const LEVELS: ExploreLevel[] = [
       ...stretch(ring('gap', 'gap', 'solid', 'solid'), 5),
       ...stretch(ring('gap', 'gap', 'solid', 'gap'), 4),
       ...pad(2),
+      boostOn(2),
       ...stretch(ring('gap', 'solid', 'solid', 'solid'), 5),
       ...repeat(
         [
@@ -106,6 +114,7 @@ const LEVELS: ExploreLevel[] = [
         ],
         3,
       ),
+      boostOn(2),
       ...repeat(
         [
           ...stretch(ring('gap', 'solid', 'solid', 'gap'), 4),
@@ -129,6 +138,7 @@ const LEVELS: ExploreLevel[] = [
       ...pad(2),
       ...stretch(ring('crumble', 'solid', 'solid', 'solid'), 8),
       ...pad(1),
+      boostOn(0),
       ...stretch(ring('crumble', 'crumble', 'solid', 'solid'), 6),
       ...pad(1),
       ...stretch(ring('gap', 'crumble', 'solid', 'crumble'), 6),
@@ -140,6 +150,7 @@ const LEVELS: ExploreLevel[] = [
         ],
         3,
       ),
+      boostOn(2),
       ...repeat(
         [
           ...stretch(gapOn(0), 2),
@@ -177,6 +188,7 @@ const LEVELS: ExploreLevel[] = [
       ...stretch(ring('ice', 'ice', 'solid', 'solid'), 6),
       ...stretch(ring('ice', 'gap', 'solid', 'ice'), 5),
       ...pad(1),
+      boostOn(0),
       ...stretch(ring('ice', 'ice', 'ice', 'gap'), 6),
       ...repeat(
         [
@@ -186,6 +198,7 @@ const LEVELS: ExploreLevel[] = [
         ],
         3,
       ),
+      boostOn(2),
       ...repeat(
         [
           ...stretch(gapOn(0), 3),
@@ -263,6 +276,9 @@ const LEVELS: ExploreLevel[] = [
       ...stretch(gapOn(1), 2),
       ...stretch(ring('gap', 'gap', 'solid', 'solid'), 3),
       ...stretch(ring('solid', 'gap', 'gap', 'solid'), 3),
+      ...pad(1),
+      boostOn(3),
+      ...pad(1),
       ...repeat(
         [
           ...stretch(gapOn(0), 2),
@@ -272,6 +288,9 @@ const LEVELS: ExploreLevel[] = [
         ],
         4,
       ),
+      ...pad(1),
+      boostOn(1),
+      ...pad(1),
       ...repeat(
         [
           ...stretch(ring('gap', 'gap', 'solid', 'solid'), 3),

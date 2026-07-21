@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { createDriftCamera, type DriftCamera } from './camera'
 import { ghostWorldPos, playerWorldPos, type DriftWorld } from './sim'
 import {
+  BASE_SPEED,
   FACE_LATERAL,
   FACE_OUTWARD,
   RING_DEPTH,
@@ -86,6 +87,35 @@ export function createDriftScene(canvas: HTMLCanvasElement): DriftScene {
     )
     scene.add(stars)
   }
+
+  const speedLineCount = 42
+  const speedLinePositions = new Float32Array(speedLineCount * 6)
+  const speedLineSeeds = Array.from({ length: speedLineCount }, () => ({
+    x: (Math.random() - 0.5) * TUNNEL_HALF * 1.7,
+    y: (Math.random() - 0.5) * TUNNEL_HALF * 1.7,
+    z: Math.random() * 22,
+    gate: Math.random(),
+  }))
+  const speedLineGeo = new THREE.BufferGeometry()
+  speedLineGeo.setAttribute(
+    'position',
+    new THREE.BufferAttribute(speedLinePositions, 3),
+  )
+  const speedLineMat = new THREE.LineBasicMaterial({
+    color: 0x7dfff1,
+    transparent: true,
+    opacity: 0,
+    depthTest: false,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  })
+  const speedLines = new THREE.LineSegments(speedLineGeo, speedLineMat)
+  speedLines.renderOrder = 4
+  speedLines.visible = false
+  // Positions follow the player every frame, so the geometry's initial
+  // bounding sphere is not valid for frustum culling later in a run.
+  speedLines.frustumCulled = false
+  scene.add(speedLines)
 
   const tunnelGroup = new THREE.Group()
   scene.add(tunnelGroup)
@@ -239,6 +269,32 @@ export function createDriftScene(canvas: HTMLCanvasElement): DriftScene {
     const up = new THREE.Vector3(p.up[0], p.up[1], p.up[2])
     runner.position.set(p.x, p.y, p.z).addScaledVector(up, 0.38)
 
+    const speedRatio = world.speed / BASE_SPEED[world.speedPreset]
+    const speedIntensity = THREE.MathUtils.clamp((speedRatio - 1) / 2.2, 0, 1)
+    speedLines.visible = speedIntensity > 0.015
+    speedLineMat.opacity = 0.18 + speedIntensity * 0.62
+    speedLineMat.color.setHSL(0.48 - speedIntensity * 0.08, 1, 0.68)
+    const activeFraction = 0.18 + speedIntensity * 0.82
+    for (let i = 0; i < speedLineCount; i++) {
+      const seed = speedLineSeeds[i]!
+      const offset = i * 6
+      if (seed.gate > activeFraction) {
+        speedLinePositions.fill(0, offset, offset + 6)
+        continue
+      }
+      const phase =
+        ((seed.z - world.elapsed * world.speed * 1.6) % 22 + 22) % 22
+      const z = p.z + 1 + phase
+      const length = 0.45 + speedIntensity * 3.8
+      speedLinePositions[offset] = seed.x
+      speedLinePositions[offset + 1] = seed.y
+      speedLinePositions[offset + 2] = z
+      speedLinePositions[offset + 3] = seed.x
+      speedLinePositions[offset + 4] = seed.y
+      speedLinePositions[offset + 5] = z + length
+    }
+    speedLineGeo.attributes.position.needsUpdate = true
+
     // Begin facing the viewer, then visually pivot to show the mascot's back.
     const turnProgress = world.phase === 'idle'
       ? 0
@@ -278,12 +334,16 @@ export function createDriftScene(canvas: HTMLCanvasElement): DriftScene {
     rim.position.set(p.x, p.y, p.z + 2)
     accent.position.set(p.x, p.y, p.z + 10)
 
-    // Boost pulse
-    if (world.boostT > 0) {
-      rim.intensity = 5
-    } else {
-      rim.intensity = 2.8
-    }
+    // Lighting and tunnel edges build with speed, then fade with deceleration.
+    rim.intensity = 2.8 + speedIntensity * 8
+    rim.color.setHSL(0.48 - speedIntensity * 0.08, 1, 0.62)
+    accent.intensity = 2.1 + speedIntensity * 4
+    edgeMat.opacity = 0.72 + speedIntensity * 0.22
+    edgeMat.color.setHSL(
+      0.48 - speedIntensity * 0.1,
+      0.75 + speedIntensity * 0.25,
+      0.64 + speedIntensity * 0.22,
+    )
   }
 
   return {
@@ -309,6 +369,8 @@ export function createDriftScene(canvas: HTMLCanvasElement): DriftScene {
       edgeGeo.dispose()
       for (const m of matCache.values()) m.dispose()
       edgeMat.dispose()
+      speedLineGeo.dispose()
+      speedLineMat.dispose()
       mascotFrontTexture.dispose()
       mascotBackTexture.dispose()
       mascotMaterial.dispose()

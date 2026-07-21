@@ -44,7 +44,11 @@ export function DriftGameView({ shell }: GameViewProps) {
               PB GHOST · {formatRunTime(snap.ghostTime)}
             </span>
           )}
-          {snap.boostT > 0 && <span className="drift-hud__boost">BOOST</span>}
+          {snap.boostT > 0 && (
+            <span className="drift-hud__boost">
+              BOOST{snap.boostStacks > 1 ? ` ×${snap.boostStacks}` : ''}
+            </span>
+          )}
         </span>
       </div>
 
