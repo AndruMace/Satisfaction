@@ -8,6 +8,7 @@ export const dominoHeistModule: SpectatorGameModule = {
   blurb: 'Real physics cascade — spaced to look doomed, forced by nothing.',
   idleHint: 'Launch and let gravity do the heist',
   available: true,
+  visibility: 'studio',
   GameView: DominoGameView,
   Controls: DominoControls,
 }

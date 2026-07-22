@@ -8,6 +8,7 @@ export const cascadeTycoonModule: SpectatorGameModule = {
   blurb: 'Drop, bounce, cash out — grow the peg empire.',
   idleHint: 'Balls drop automatically',
   available: true,
+  visibility: 'studio',
   GameView: CascadeGameView,
   Controls: CascadeControls,
 }

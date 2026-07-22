@@ -7,6 +7,7 @@ export const bounceRaceModule: SpectatorGameModule = {
   title: 'Bounce Race',
   blurb: 'Two to six racers — launch and watch.',
   available: true,
+  visibility: 'studio',
   GameView: BounceGameView,
   Controls: BounceControls,
 }

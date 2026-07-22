@@ -8,6 +8,7 @@ export const driftTunnelModule: SpectatorGameModule = {
   blurb: 'Auto-run a fractured space conduit. Flip gravity onto any face. Don’t fall into the void.',
   idleHint: 'Tap to launch',
   available: true,
+  visibility: 'public',
   GameView: DriftGameView,
   Controls: DriftControls,
 }

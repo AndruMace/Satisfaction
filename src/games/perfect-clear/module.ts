@@ -8,6 +8,7 @@ export const perfectClearModule: SpectatorGameModule = {
   blurb: 'One spark. One cascade. 100% wipe.',
   idleHint: 'Tap to ignite',
   available: true,
+  visibility: 'studio',
   GameView: ClearGameView,
   Controls: ClearControls,
 }

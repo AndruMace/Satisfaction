@@ -1,0 +1,96 @@
+/* Site chrome — home + public header. Play/studio keep .suite column from App.css. */
+
+.site {
+  width: min(100%, 720px);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.site--play {
+  width: min(100%, 420px);
+  align-items: center;
+  gap: 16px;
+}
+
+.site-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.site-header__brand {
+  font-family: var(--brand-font);
+  font-weight: 800;
+  font-size: 1.15rem;
+  letter-spacing: -0.02em;
+  color: var(--text-bright);
+  text-decoration: none;
+}
+
+.site-header__brand:hover {
+  color: var(--accent);
+}
+
+.site-header__nav {
+  display: flex;
+  gap: 12px;
+}
+
+.site-header__link {
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.site-header__link:hover {
+  color: var(--text-bright);
+}
+
+.home {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 48px 0 32px;
+}
+
+.home__tagline {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.home__headline {
+  margin: 0;
+  font-family: var(--brand-font);
+  font-weight: 800;
+  font-size: clamp(2rem, 6vw, 3rem);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: var(--text-bright);
+}
+
+.home__support {
+  margin: 0;
+  max-width: 36rem;
+  font-size: 1.05rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.home__cta {
+  margin-top: 8px;
+  text-decoration: none;
+}
+
+/* Studio game-nav tabs are Links now */
+.game-nav__tab {
+  text-decoration: none;
+}

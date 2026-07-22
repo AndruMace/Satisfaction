@@ -41,6 +41,8 @@ export type GameControlsProps = {
  * Contract every spectator game plugs into GameShell with.
  * Recording starts/stops on phase transitions inside GameView (same as Bounce today).
  */
+export type GameVisibility = 'public' | 'studio'
+
 export type SpectatorGameModule = {
   id: string
   title: string
@@ -49,6 +51,8 @@ export type SpectatorGameModule = {
   idleHint?: string
   /** When false, nav shows the tab but selecting it shows Coming soon. */
   available: boolean
+  /** public = linked from the site; studio = reachable via /studio only. */
+  visibility: GameVisibility
   GameView: ComponentType<GameViewProps>
   Controls: ComponentType<GameControlsProps>
 }

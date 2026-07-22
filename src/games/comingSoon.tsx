@@ -26,6 +26,7 @@ export function createComingSoonModule(
     title,
     blurb,
     available: false,
+    visibility: 'studio',
     GameView: ComingSoonView,
     Controls: ComingSoonControls,
   }

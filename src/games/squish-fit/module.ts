@@ -8,6 +8,7 @@ export const squishFitModule: SpectatorGameModule = {
   blurb: 'Soft gel shapes. One jar. 100% volume.',
   idleHint: 'Shapes drop automatically',
   available: true,
+  visibility: 'studio',
   GameView: SquishGameView,
   Controls: SquishControls,
 }

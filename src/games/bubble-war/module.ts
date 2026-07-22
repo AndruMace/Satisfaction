@@ -7,6 +7,7 @@ export const bubbleWarModule: SpectatorGameModule = {
   title: 'Bubble War',
   blurb: 'Inflate, shove, pop — last bubble standing.',
   available: true,
+  visibility: 'studio',
   GameView: BubbleGameView,
   Controls: BubbleControls,
 }

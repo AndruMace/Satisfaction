@@ -262,7 +262,7 @@ function sparkHitsNode(spark: Spark, node: ClearNode): boolean {
   return dx * dx + dy * dy <= spark.radius * spark.radius
 }
 
-function emitSparks(world: ClearWorld, node: ClearNode, born: Spark[]): void {
+function emitSparks(_world: ClearWorld, node: ClearNode, born: Spark[]): void {
   const count =
     BURST_COUNT_MIN +
     Math.floor(Math.random() * (BURST_COUNT_MAX - BURST_COUNT_MIN + 1))

@@ -47,7 +47,7 @@ let rapierInit: Promise<void> | null = null
 /** Must be awaited once before creating a physics world. */
 export function initDominoPhysics(): Promise<void> {
   if (!rapierInit) {
-    rapierInit = RAPIER.init({}).then(() => undefined)
+    rapierInit = RAPIER.init().then(() => undefined)
   }
   return rapierInit
 }
@@ -90,7 +90,6 @@ export function createDominoPhysics(): DominoPhysics {
   let settleTimer = 0
   let raceTime = 0
   let dramaTimer = 0
-  let kicked = false
   let kickFramesLeft = 0
   let hx = DOMINO.face * 0.5 * COL_SCALE
   let hy = DOMINO.h * 0.5 * COL_SCALE
@@ -295,13 +294,11 @@ export function createDominoPhysics(): DominoPhysics {
       settleTimer = 0
       raceTime = 0
       dramaTimer = 0
-      kicked = false
       kickFramesLeft = 0
       buildWorld(next)
     },
     kickstart() {
       if (!bodies[0] || !course || !world) return
-      kicked = true
       setEnabled(0, true)
       if (bodies[1]) setEnabled(1, true)
       if (bodies[2]) setEnabled(2, true)

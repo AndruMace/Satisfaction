@@ -7,6 +7,7 @@ export const laserRouletteModule: SpectatorGameModule = {
   title: 'Laser Roulette',
   blurb: 'Dodge the beams. Last standing wins.',
   available: true,
+  visibility: 'studio',
   GameView: LaserGameView,
   Controls: LaserControls,
 }
