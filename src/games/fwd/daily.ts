@@ -42,6 +42,10 @@ export type DailyValidation = {
   hasRoute: boolean
   hasSafeStart: boolean
   hasSafeFinish: boolean
+  singleSafeRings: number
+  routeChanges: number
+  hazardVariety: number
+  difficultyScore: number
 }
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
@@ -302,9 +306,24 @@ function boostRing(face: FaceIndex): Ring {
   return ring(kinds[0]!, kinds[1]!, kinds[2]!, kinds[3]!)
 }
 
+function specialRing(face: FaceIndex, kind: TileKind): Ring {
+  const kinds: TileKind[] = ['solid', 'solid', 'solid', 'solid']
+  kinds[face] = kind
+  return ring(kinds[0]!, kinds[1]!, kinds[2]!, kinds[3]!)
+}
+
+function routeRing(
+  safeFaces: readonly FaceIndex[],
+  boostFace?: FaceIndex,
+): Ring {
+  const kinds: TileKind[] = ['gap', 'gap', 'gap', 'gap']
+  for (const face of safeFaces) kinds[face] = face === boostFace ? 'boost' : 'solid'
+  return ring(kinds[0]!, kinds[1]!, kinds[2]!, kinds[3]!)
+}
+
 function recovery(state: SeedState, previousFace: FaceIndex): Ring[] {
-  const length = 3 + Math.floor(random(state) * 2)
-  const boostFace = random(state) < 0.78 ? choose(state, [0, 1, 2, 3] as const) : -1
+  const length = 2 + Math.floor(random(state) * 3)
+  const boostFace = random(state) < 0.82 ? choose(state, [0, 1, 2, 3] as const) : -1
   return Array.from({ length }, (_, index) =>
     index === 1 && boostFace >= 0
       ? boostRing(boostFace as FaceIndex)
@@ -316,7 +335,8 @@ function recovery(state: SeedState, previousFace: FaceIndex): Ring[] {
 
 function jumpMotif(state: SeedState, difficulty: number): Ring[] {
   const face = choose(state, [0, 1, 2, 3] as const)
-  const length = 2 + Math.floor(random(state) * Math.min(2, 1 + difficulty))
+  const maxExtra = difficulty >= 2 ? 2 : 1
+  const length = 2 + Math.floor(random(state) * (maxExtra + 1))
   const kinds: TileKind[] = ['solid', 'solid', 'solid', 'solid']
   kinds[face] = 'gap'
   return repeated(ring(kinds[0]!, kinds[1]!, kinds[2]!, kinds[3]!), length)
@@ -324,7 +344,7 @@ function jumpMotif(state: SeedState, difficulty: number): Ring[] {
 
 function wallTransferMotif(state: SeedState, difficulty: number): Ring[] {
   const missing = choose(state, [0, 1, 2, 3] as const)
-  const length = 5 + Math.floor(random(state) * Math.min(3, 1 + difficulty))
+  const length = 6 + Math.floor(random(state) * Math.min(4, 2 + difficulty))
   const kinds: TileKind[] = ['solid', 'solid', 'solid', 'solid']
   kinds[missing] = 'gap'
   const lane = ((missing + (random(state) < 0.5 ? 1 : 3)) % 4) as FaceIndex
@@ -335,7 +355,7 @@ function wallTransferMotif(state: SeedState, difficulty: number): Ring[] {
 function rotatingMotif(state: SeedState, difficulty: number): Ring[] {
   const direction = random(state) < 0.5 ? 1 : 3
   let face = choose(state, [0, 1, 2, 3] as const)
-  const sections = 3 + Math.min(2, difficulty)
+  const sections = 4 + Math.min(2, difficulty)
   const rings: Ring[] = []
   for (let section = 0; section < sections; section++) {
     const kinds: TileKind[] = ['solid', 'solid', 'solid', 'solid']
@@ -350,7 +370,7 @@ function rotatingMotif(state: SeedState, difficulty: number): Ring[] {
 }
 
 function textureMotif(state: SeedState, difficulty: number): Ring[] {
-  const length = 5 + difficulty
+  const length = 6 + difficulty
   const safeFace = choose(state, [0, 1, 2, 3] as const)
   return Array.from({ length }, (_, index) => {
     const kinds: TileKind[] = ['solid', 'solid', 'solid', 'solid']
@@ -362,16 +382,76 @@ function textureMotif(state: SeedState, difficulty: number): Ring[] {
   })
 }
 
+/**
+ * A readable but committed route: an adjacent two-face handoff window is
+ * followed by a one-face corridor. The overlap makes every required flip
+ * possible without allowing the player to remain on an arbitrary safe face.
+ */
+function corridorMotif(state: SeedState, difficulty: number): Ring[] {
+  const direction = random(state) < 0.5 ? 1 : 3
+  let face = choose(state, [0, 1, 2, 3] as const)
+  const stages = 2 + Math.min(2, Math.floor(difficulty / 2))
+  const rings: Ring[] = []
+
+  for (let stage = 0; stage < stages; stage++) {
+    const next = ((face + direction) % 4) as FaceIndex
+    rings.push(
+      routeRing([face, next], next),
+      routeRing([face, next]),
+    )
+    const committedLength = 3 + Math.min(2, difficulty)
+    rings.push(...repeated(routeRing([next]), committedLength))
+    face = next
+  }
+  return rings
+}
+
+/** Two-face lanes rotate with one shared face, creating quick readable flips. */
+function slalomMotif(state: SeedState, difficulty: number): Ring[] {
+  const direction = random(state) < 0.5 ? 1 : 3
+  let face = choose(state, [0, 1, 2, 3] as const)
+  const stages = 4 + Math.min(2, difficulty)
+  const rings: Ring[] = []
+
+  for (let stage = 0; stage < stages; stage++) {
+    const next = ((face + direction) % 4) as FaceIndex
+    const boostFace = stage % 3 === 1 ? next : undefined
+    rings.push(
+      routeRing([face, next], boostFace),
+      routeRing([face, next]),
+      routeRing([face, next]),
+    )
+    face = next
+  }
+  return rings
+}
+
 function buildCandidate(seed: number): Ring[] {
   const state = { value: seed }
   const rings: Ring[] = Array.from({ length: 8 }, () => solidRing())
   let previousFace: FaceIndex = 0
-  for (let section = 0; section < 13; section++) {
-    const difficulty = Math.min(3, Math.floor(section / 4))
+  let previousBuilder = -1
+  const builders = [
+    jumpMotif,
+    wallTransferMotif,
+    rotatingMotif,
+    textureMotif,
+    corridorMotif,
+    slalomMotif,
+  ] as const
+
+  for (let section = 0; section < 15; section++) {
+    const difficulty = Math.min(4, Math.floor((section + 1) / 3))
     rings.push(...recovery(state, previousFace))
-    const builders = [jumpMotif, wallTransferMotif, rotatingMotif, textureMotif] as const
-    const builder = choose(state, builders)
-    rings.push(...builder(state, difficulty))
+    let builderIndex =
+      section % 4 === 2
+        ? 4
+        : section % 5 === 4
+          ? 3
+          : Math.floor(random(state) * builders.length)
+    if (builderIndex === previousBuilder) builderIndex = (builderIndex + 1) % builders.length
+    rings.push(...builders[builderIndex]!(state, difficulty))
+    previousBuilder = builderIndex
     previousFace = choose(state, [0, 1, 2, 3] as const)
   }
   rings.push(...Array.from({ length: 7 }, () => solidRing()))
@@ -387,7 +467,12 @@ function isRouteReachable(rings: Ring[]): boolean {
     for (const face of reachable[index]!) {
       for (const destination of [face, ((face + 1) % 4) as FaceIndex, ((face + 3) % 4) as FaceIndex]) {
         const nextRing = rings[index + 1]
-        if (nextRing && nextRing[destination].kind !== 'gap') {
+        const destinationIsAvailableNow = rings[index]![destination].kind !== 'gap'
+        if (
+          nextRing &&
+          destinationIsAvailableNow &&
+          nextRing[destination].kind !== 'gap'
+        ) {
           reachable[index + 1]!.add(destination)
         }
       }
@@ -407,28 +492,63 @@ export function validateDailyCourse(rings: Ring[]): DailyValidation {
   const hasSafeStart = rings.slice(0, 6).every((item) => item.every((tile) => tile.kind !== 'gap'))
   const hasSafeFinish = rings.slice(-5).every((item) => item.every((tile) => tile.kind !== 'gap'))
   const hasRoute = isRouteReachable(rings)
+  const safeMasks = rings.map((item) =>
+    item.reduce(
+      (mask, tile, face) => mask | (tile.kind === 'gap' ? 0 : 1 << face),
+      0,
+    ),
+  )
+  const singleSafeRings = safeMasks.filter(
+    (mask) => mask !== 0 && (mask & (mask - 1)) === 0,
+  ).length
+  const routeChanges = safeMasks.reduce(
+    (count, mask, index) => count + (index > 0 && mask !== safeMasks[index - 1] ? 1 : 0),
+    0,
+  )
+  const hazardVariety = new Set(
+    tiles.filter((tile) => tile.kind !== 'solid').map((tile) => tile.kind),
+  ).size
+  const difficultyScore =
+    singleSafeRings * 2 +
+    routeChanges * 3 +
+    hazardVariety * 8 +
+    Math.round(rings.length / 8)
   return {
     ok:
-      rings.length >= 90 &&
+      rings.length >= 115 &&
       hasSafeStart &&
       hasSafeFinish &&
       hasRoute &&
+      singleSafeRings >= 18 &&
+      routeChanges >= 10 &&
+      hazardVariety >= 3 &&
+      difficultyScore >= 115 &&
       boostDensity >= MIN_BOOST_DENSITY &&
       boostDensity <= MAX_BOOST_DENSITY,
     boostDensity,
     hasRoute,
     hasSafeStart,
     hasSafeFinish,
+    singleSafeRings,
+    routeChanges,
+    hazardVariety,
+    difficultyScore,
   }
 }
 
 function fallbackCourse(): Ring[] {
   const rings: Ring[] = Array.from({ length: 8 }, () => solidRing())
-  for (let section = 0; section < 14; section++) {
-    rings.push(solidRing(), boostRing((section % 4) as FaceIndex), solidRing())
-    const kinds: TileKind[] = ['solid', 'solid', 'solid', 'solid']
-    kinds[(section % 4) as FaceIndex] = 'gap'
-    rings.push(...repeated(ring(kinds[0]!, kinds[1]!, kinds[2]!, kinds[3]!), 3))
+  let face: FaceIndex = 0
+  for (let section = 0; section < 18; section++) {
+    rings.push(
+      specialRing((section % 4) as FaceIndex, section % 2 === 0 ? 'ice' : 'crumble'),
+      boostRing((section % 4) as FaceIndex),
+      solidRing(),
+    )
+    const next = ((face + 1) % 4) as FaceIndex
+    rings.push(routeRing([face, next], next), routeRing([face, next]))
+    rings.push(...repeated(routeRing([next]), 3))
+    face = next
   }
   rings.push(...Array.from({ length: 7 }, () => solidRing()))
   return rings

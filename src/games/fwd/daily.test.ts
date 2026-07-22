@@ -24,7 +24,7 @@ import {
   stepWorld,
 } from './sim'
 import { RING_DEPTH } from './types'
-import { ring } from './tunnel'
+import { ring, solidRing } from './tunnel'
 
 class MemoryStorage {
   private values = new Map<string, string>()
@@ -66,7 +66,7 @@ describe('daily identity and generation', () => {
     const second = buildDailyCourse('2026-07-22')
     const nextDay = buildDailyCourse('2026-07-23')
 
-    expect(first.rings.length).toBeGreaterThanOrEqual(90)
+    expect(first.rings.length).toBeGreaterThanOrEqual(115)
     expect(kinds(first)).toBe(kinds(second))
     expect(kinds(first)).not.toBe(kinds(nextDay))
     expect(validateDailyCourse(first.rings)).toMatchObject({
@@ -78,10 +78,19 @@ describe('daily identity and generation', () => {
   })
 
   it('keeps a range of generated dates valid and rejects impossible geometry', () => {
+    const fingerprints = new Set<string>()
     for (let day = 22; day <= 31; day++) {
       const course = buildDailyCourse(`2026-07-${day}`)
-      expect(validateDailyCourse(course.rings).ok).toBe(true)
+      const validation = validateDailyCourse(course.rings)
+      expect(validation).toMatchObject({
+        ok: true,
+        hasRoute: true,
+      })
+      expect(validation.singleSafeRings).toBeGreaterThanOrEqual(18)
+      expect(validation.routeChanges).toBeGreaterThanOrEqual(10)
+      fingerprints.add(kinds(course))
     }
+    expect(fingerprints.size).toBeGreaterThanOrEqual(8)
     const impossible = Array.from({ length: 100 }, () =>
       ring('gap', 'gap', 'gap', 'gap'),
     )
@@ -176,6 +185,9 @@ describe('daily simulation integration', () => {
 
     expect(world.speedPreset).toBe('normal')
     startRun(world)
+    for (let ringIndex = 0; ringIndex <= 2; ringIndex++) {
+      world.rings[ringIndex]![0].kind = 'gap'
+    }
     world.falling = true
     world.height = -2
     stepWorld(world, 0.01, { left: false, right: false, jump: false })
@@ -185,6 +197,9 @@ describe('daily simulation integration', () => {
     commitDailyRankedAttempt(world)
     resetRun(world, 'daily')
     startRun(world)
+    for (let ringIndex = 0; ringIndex <= 2; ringIndex++) {
+      world.rings[ringIndex]![0].kind = 'gap'
+    }
     world.falling = true
     world.height = -2
     stepWorld(world, 0.01, { left: false, right: false, jump: false })
@@ -200,5 +215,47 @@ describe('daily simulation integration', () => {
     expect(world.dailyRecord.clears).toEqual([])
     expect(world.dailyRecord.rankedCommitted).toBe(false)
     expect(world.phase).toBe('idle')
+  })
+})
+
+describe('landing forgiveness', () => {
+  it('does not let the runner cross a one-ring gap without jumping', () => {
+    const world = createWorld('explore')
+    world.rings = [
+      solidRing(),
+      solidRing(),
+      ring('gap', 'solid', 'solid', 'solid'),
+      solidRing(),
+      solidRing(),
+    ]
+    startRun(world)
+
+    for (let frame = 0; frame < 90 && world.phase === 'racing'; frame++) {
+      stepWorld(world, 1 / 60, { left: false, right: false, jump: false })
+    }
+
+    expect(world.phase).toBe('failed')
+  })
+
+  it('uses the visible runner footprint for an edge landing', () => {
+    const world = createWorld('explore')
+    world.rings = [
+      solidRing(),
+      solidRing(),
+      ring('gap', 'solid', 'solid', 'solid'),
+      ring('gap', 'solid', 'solid', 'solid'),
+      solidRing(),
+    ]
+    startRun(world)
+    world.z = RING_DEPTH * 2 + 0.11
+    world.height = 0.06
+    world.vHeight = -1
+    world.falling = false
+
+    stepWorld(world, 0.001, { left: false, right: false, jump: false })
+
+    expect(world.falling).toBe(false)
+    expect(world.height).toBe(0)
+    expect(world.supportRing).toBe(1)
   })
 })

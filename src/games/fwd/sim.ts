@@ -58,6 +58,10 @@ const GHOST_SAMPLE_INTERVAL = 0.1
 const MAX_GHOST_SAMPLES = 18_000
 /** Collision-only ledge extending 10% of a tile into either edge of a gap. */
 const SUPPORT_OVERHANG = RING_DEPTH * 0.1
+/** The runner has visible depth; landings use a matching longitudinal footprint. */
+const PLAYER_HALF_DEPTH = RING_DEPTH * 0.12
+/** Small descending snap that makes visually convincing landings deterministic. */
+const LANDING_SNAP_HEIGHT = 0.07
 /** Keep swept movement shorter than the narrowest collision feature. */
 const MAX_PHYSICS_STEP = SUPPORT_OVERHANG * 0.5
 
@@ -538,6 +542,55 @@ function supportAt(
   return null
 }
 
+/**
+ * Landing support uses the runner's visible footprint instead of only its
+ * center point. Ground movement still uses supportAt, so gaps are not made
+ * globally shorter.
+ */
+function landingSupportAt(
+  world: FwdWorld,
+  z: number,
+  face = world.face,
+): SupportInfo | null {
+  const centered = supportAt(world, z, face)
+  if (centered) return centered
+
+  const firstRing = Math.floor((z - PLAYER_HALF_DEPTH) / RING_DEPTH)
+  const lastRing = Math.floor((z + PLAYER_HALF_DEPTH) / RING_DEPTH)
+  let best: SupportInfo | null = null
+  let bestDistance = Number.POSITIVE_INFINITY
+
+  for (let absRing = firstRing; absRing <= lastRing; absRing++) {
+    const localRing = absRing - world.ringOffset
+    const tile = getTile(world.rings, localRing, face)
+    if (!isWalkable(tile)) continue
+    const center = (absRing + 0.5) * RING_DEPTH
+    const distance = Math.abs(center - z)
+    if (distance < bestDistance) {
+      best = { tile: tile!, absRing }
+      bestDistance = distance
+    }
+  }
+  return best
+}
+
+/** Interpolate where the descending feet cross the floor, then test support. */
+function sweptLandingSupport(
+  world: FwdWorld,
+  previousZ: number,
+  previousHeight: number,
+): SupportInfo | null {
+  if (world.vHeight > 0 || world.height > LANDING_SNAP_HEIGHT) return null
+
+  let landingZ = world.z
+  if (previousHeight > 0 && world.height <= 0) {
+    const heightDelta = previousHeight - world.height
+    const t = heightDelta > 0 ? previousHeight / heightDelta : 1
+    landingZ = previousZ + (world.z - previousZ) * Math.max(0, Math.min(1, t))
+  }
+  return landingSupportAt(world, landingZ)
+}
+
 function ensureStream(world: FwdWorld) {
   if (world.mode !== 'infinite') return
   const playerRing = Math.floor(world.z / RING_DEPTH)
@@ -647,6 +700,20 @@ function leaveSupport(world: FwdWorld) {
   }
 }
 
+function settleOnSupport(world: FwdWorld, support: SupportInfo) {
+  if (support.absRing !== world.supportRing || world.face !== world.supportFace) {
+    leaveSupport(world)
+    world.supportRing = support.absRing
+    world.supportFace = world.face
+  }
+  world.falling = false
+  world.height = 0
+  world.vHeight = 0
+  world.coyoteT = COYOTE_TIME
+  world.wasGrounded = true
+  applyTileEffects(world, support)
+}
+
 function canBeginBoostDecay(world: FwdWorld): boolean {
   return (
     !world.falling &&
@@ -739,6 +806,9 @@ export function stepWorld(world: FwdWorld, dt: number, input: FwdInput) {
 }
 
 function stepMotion(world: FwdWorld, dt: number, input: FwdInput) {
+  const previousZ = world.z
+  const previousHeight = world.height
+
   if (world.falling) {
     world.jumpBufferT = Math.max(0, world.jumpBufferT - dt)
     world.coyoteT = Math.max(0, world.coyoteT - dt)
@@ -820,28 +890,16 @@ function stepMotion(world: FwdWorld, dt: number, input: FwdInput) {
   world.height += world.vHeight * dt
   world.z += world.speed * dt
 
-  const support = supportAt(world)
-  if (world.height <= 0) {
-    if (support) {
-      const ring = support.absRing
-      if (ring !== world.supportRing || world.face !== world.supportFace) {
-        leaveSupport(world)
-        world.supportRing = ring
-        world.supportFace = world.face
-      }
-      world.height = 0
-      world.vHeight = 0
-      world.coyoteT = COYOTE_TIME
-      world.wasGrounded = true
-      applyTileEffects(world, support)
-    } else {
+  const landingSupport = sweptLandingSupport(world, previousZ, previousHeight)
+  if (landingSupport) {
+    settleOnSupport(world, landingSupport)
+  } else if (world.height <= 0) {
       // A missing surface starts a fall. Coyote time may still turn the first
       // instant into a jump; after that, later rings cannot snap the player up.
       leaveSupport(world)
       world.falling = true
       world.wasGrounded = false
       world.vHeight = Math.min(world.vHeight, -1.5)
-    }
   } else {
     world.wasGrounded = false
   }
