@@ -1,11 +1,11 @@
 import * as THREE from 'three'
-import { playerWorldPos, type DriftWorld } from './sim'
+import { playerWorldPos, type FwdWorld } from './sim'
 import { BASE_SPEED, FACE_OUTWARD, type FaceIndex } from './types'
 
-export type DriftCamera = {
+export type FwdCamera = {
   camera: THREE.PerspectiveCamera
-  update: (world: DriftWorld, dt: number) => void
-  reset: (world: DriftWorld) => void
+  update: (world: FwdWorld, dt: number) => void
+  reset: (world: FwdWorld) => void
 }
 
 function faceUp(face: FaceIndex, out: THREE.Vector3) {
@@ -13,14 +13,14 @@ function faceUp(face: FaceIndex, out: THREE.Vector3) {
   out.set(-o[0]!, -o[1]!, -o[2]!)
 }
 
-export function createDriftCamera(): DriftCamera {
+export function createFwdCamera(): FwdCamera {
   const camera = new THREE.PerspectiveCamera(58, 540 / 960, 0.08, 140)
   const desiredPos = new THREE.Vector3()
   const look = new THREE.Vector3()
   const up = new THREE.Vector3(0, 1, 0)
   const desiredUp = new THREE.Vector3()
 
-  function compute(world: DriftWorld) {
+  function compute(world: FwdWorld) {
     const p = playerWorldPos(world)
     faceUp(world.face, desiredUp)
 
@@ -38,7 +38,7 @@ export function createDriftCamera(): DriftCamera {
     camera.lookAt(look)
   }
 
-  function targetFov(world: DriftWorld) {
+  function targetFov(world: FwdWorld) {
     const speedRatio = world.speed / BASE_SPEED[world.speedPreset]
     return 58 + THREE.MathUtils.clamp(speedRatio - 1, 0, 3) * 5.5
   }

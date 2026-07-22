@@ -1,8 +1,8 @@
-import type { DriftInput } from './types'
+import type { FwdInput } from './types'
 
 export type InputController = {
-  get: () => DriftInput
-  setTouch: (partial: Partial<DriftInput>) => void
+  get: () => FwdInput
+  setTouch: (partial: Partial<FwdInput>) => void
   dispose: () => void
 }
 

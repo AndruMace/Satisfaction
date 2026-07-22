@@ -1,27 +1,27 @@
 import { useEffect, useRef } from 'react'
 import type { MutableRefObject } from 'react'
 import { createInputController, type InputController } from './input'
-import { createDriftScene, type DriftScene } from './scene'
-import { snapshot, stepWorld, type DriftWorld } from './sim'
-import type { DriftSnapshot } from './types'
+import { createFwdScene, type FwdScene } from './scene'
+import { snapshot, stepWorld, type FwdWorld } from './sim'
+import type { FwdSnapshot } from './types'
 
-type DriftCanvasProps = {
-  worldRef: MutableRefObject<DriftWorld>
+type FwdCanvasProps = {
+  worldRef: MutableRefObject<FwdWorld>
   running: boolean
-  onSnapshot: (snap: DriftSnapshot) => void
+  onSnapshot: (snap: FwdSnapshot) => void
   inputRef: MutableRefObject<InputController | null>
   resetKey: number
 }
 
-export function DriftCanvas({
+export function FwdCanvas({
   worldRef,
   running,
   onSnapshot,
   inputRef,
   resetKey,
-}: DriftCanvasProps) {
+}: FwdCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const sceneRef = useRef<DriftScene | null>(null)
+  const sceneRef = useRef<FwdScene | null>(null)
   const onSnapshotRef = useRef(onSnapshot)
   onSnapshotRef.current = onSnapshot
   const runningRef = useRef(running)
@@ -31,7 +31,7 @@ export function DriftCanvas({
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const scene = createDriftScene(canvas)
+    const scene = createFwdScene(canvas)
     sceneRef.current = scene
     const input = createInputController(canvas)
     inputRef.current = input
@@ -94,5 +94,5 @@ export function DriftCanvas({
     onSnapshotRef.current(snapshot(worldRef.current))
   }, [resetKey, worldRef])
 
-  return <canvas ref={canvasRef} className="drift-canvas game-canvas" />
+  return <canvas ref={canvasRef} className="fwd-canvas game-canvas" />
 }

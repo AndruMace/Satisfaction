@@ -2,7 +2,6 @@ import { Navigate } from 'react-router-dom'
 import { DEFAULT_PUBLIC_GAME_ID, getGameById } from '../catalog/games'
 import { GameShell } from '../shell/GameShell'
 import { SITE_NAME } from './content'
-import { SiteHeader } from './SiteHeader'
 import { useDocumentTitle } from './useDocumentTitle'
 
 export function PlayPage() {
@@ -15,7 +14,6 @@ export function PlayPage() {
 
   return (
     <div className={`site site--play suite suite--${game.id}`}>
-      <SiteHeader />
       <GameShell key={game.id} module={game} />
     </div>
   )

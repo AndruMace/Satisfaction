@@ -1,6 +1,6 @@
 import * as THREE from 'three'
-import { createDriftCamera, type DriftCamera } from './camera'
-import { ghostWorldPos, playerWorldPos, type DriftWorld } from './sim'
+import { createFwdCamera, type FwdCamera } from './camera'
+import { ghostWorldPos, playerWorldPos, type FwdWorld } from './sim'
 import {
   BASE_SPEED,
   FACE_LATERAL,
@@ -30,19 +30,19 @@ const TILE_EMISSIVE: Record<TileKind, number> = {
   boost: 0x18ff70,
 }
 
-export type DriftScene = {
+export type FwdScene = {
   renderer: THREE.WebGLRenderer
-  sync: (world: DriftWorld) => void
+  sync: (world: FwdWorld) => void
   render: () => void
   setSize: (cssWidth: number, cssHeight: number, dpr: number) => void
-  updateCamera: (world: DriftWorld, dt: number) => void
-  resetCamera: (world: DriftWorld) => void
+  updateCamera: (world: FwdWorld, dt: number) => void
+  resetCamera: (world: FwdWorld) => void
   dispose: () => void
 }
 
 type TileMesh = THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMaterial>
 
-export function createDriftScene(canvas: HTMLCanvasElement): DriftScene {
+export function createFwdScene(canvas: HTMLCanvasElement): FwdScene {
   const renderer = new THREE.WebGLRenderer({
     canvas,
     antialias: true,
@@ -56,7 +56,7 @@ export function createDriftScene(canvas: HTMLCanvasElement): DriftScene {
   scene.background = new THREE.Color(BG)
   scene.fog = new THREE.FogExp2(FOG, 0.045)
 
-  const camApi: DriftCamera = createDriftCamera()
+  const camApi: FwdCamera = createFwdCamera()
   const { camera } = camApi
 
   scene.add(new THREE.AmbientLight(0xb5c8ff, 1.05))
@@ -232,7 +232,7 @@ export function createDriftScene(canvas: HTMLCanvasElement): DriftScene {
   scene.add(ghost)
   runner.renderOrder = 3
 
-  function sync(world: DriftWorld) {
+  function sync(world: FwdWorld) {
     activeTiles = 0
     activeEdges = 0
 

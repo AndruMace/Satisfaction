@@ -3,9 +3,9 @@ export type FaceIndex = 0 | 1 | 2 | 3
 
 export type TileKind = 'solid' | 'gap' | 'crumble' | 'ice' | 'boost'
 
-export type DriftMode = 'explore' | 'infinite'
+export type FwdMode = 'explore' | 'daily' | 'infinite'
 
-export type DriftPhase = 'idle' | 'racing' | 'failed' | 'cleared'
+export type FwdPhase = 'idle' | 'racing' | 'failed' | 'cleared'
 
 export type SpeedPreset = 'normal' | 'fast'
 
@@ -20,7 +20,7 @@ export type Tile = {
 /** One cross-section: tile per face. */
 export type Ring = [Tile, Tile, Tile, Tile]
 
-export type DriftInput = {
+export type FwdInput = {
   left: boolean
   right: boolean
   jump: boolean
@@ -46,9 +46,9 @@ export type ExploreGhostRun = {
   samples: GhostSample[]
 }
 
-export type DriftSnapshot = {
-  phase: DriftPhase
-  mode: DriftMode
+export type FwdSnapshot = {
+  phase: FwdPhase
+  mode: FwdMode
   levelIndex: number
   levelTotal: number
   levelName: string
@@ -68,6 +68,16 @@ export type DriftSnapshot = {
   boostStacks: number
   alive: boolean
   ringsAhead: number
+  dailyDate: string
+  dailyPuzzleNumber: number
+  dailyClears: number[]
+  dailyDeaths: number
+  dailyStreak: number
+  dailyBestTime: number
+  dailyBestAttempt: number
+  dailyPractice: boolean
+  dailyRankedCommitted: boolean
+  dailyCompleted: boolean
 }
 
 export const TUNNEL_HALF = 1.45

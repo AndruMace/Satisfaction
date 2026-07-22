@@ -11,32 +11,36 @@ import {
 import type { InputController } from './input'
 import {
   createWorld,
+  clearDailyProgress,
+  commitDailyRankedAttempt,
   exploreLevelTotal,
   nextLevel,
   prevLevel,
   resetRun,
+  setDailyDate,
   setSpeedPreset,
   snapshot,
   startInfiniteSeed,
   startRun,
   switchMode,
-  type DriftWorld,
+  type FwdWorld,
 } from './sim'
-import type { DriftMode, DriftSnapshot, SpeedPreset } from './types'
+import type { FwdMode, FwdSnapshot, SpeedPreset } from './types'
+import { isDailyLocalhost, shiftUtcDate, utcDateKey } from './daily'
 
-export type DriftSession = {
-  worldRef: MutableRefObject<DriftWorld>
+export type FwdSession = {
+  worldRef: MutableRefObject<FwdWorld>
   inputRef: MutableRefObject<InputController | null>
-  snap: DriftSnapshot
-  setSnap: (s: DriftSnapshot) => void
+  snap: FwdSnapshot
+  setSnap: (s: FwdSnapshot) => void
   running: boolean
   setRunning: (v: boolean) => void
   resetKey: number
-  mode: DriftMode
+  mode: FwdMode
   speedPreset: SpeedPreset
   seedInput: string
   setSeedInput: (value: string) => void
-  setMode: (mode: DriftMode) => void
+  setMode: (mode: FwdMode) => void
   setSpeed: (preset: SpeedPreset) => void
   launch: () => void
   retry: () => void
@@ -44,19 +48,25 @@ export type DriftSession = {
   replaySeed: () => void
   goNext: () => void
   goPrev: () => void
+  commitDailyRanked: () => void
+  clearDailyLocal: () => void
+  setDailyDateLocal: (date: string) => void
+  shiftDailyDateLocal: (days: number) => void
+  resetDailyDateToToday: () => void
+  isLocalhost: boolean
   levelTotal: number
   hint: string
 }
 
-const DriftContext = createContext<DriftSession | null>(null)
+const FwdContext = createContext<FwdSession | null>(null)
 
-export function DriftTunnelProvider({ children }: { children: ReactNode }) {
-  const worldRef = useRef<DriftWorld>(createWorld('explore', 0, 'normal'))
+export function FwdProvider({ children }: { children: ReactNode }) {
+  const worldRef = useRef<FwdWorld>(createWorld('daily', 0, 'normal'))
   const inputRef = useRef<InputController | null>(null)
-  const [snap, setSnap] = useState<DriftSnapshot>(() => snapshot(worldRef.current))
+  const [snap, setSnap] = useState<FwdSnapshot>(() => snapshot(worldRef.current))
   const [running, setRunning] = useState(true)
   const [resetKey, setResetKey] = useState(0)
-  const [mode, setModeState] = useState<DriftMode>('explore')
+  const [mode, setModeState] = useState<FwdMode>('daily')
   const [speedPreset, setSpeedState] = useState<SpeedPreset>('normal')
   const [seedInput, setSeedInput] = useState('')
 
@@ -66,9 +76,10 @@ export function DriftTunnelProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const setMode = useCallback(
-    (m: DriftMode) => {
+    (m: FwdMode) => {
       switchMode(worldRef.current, m)
       setModeState(m)
+      if (m === 'daily') setSpeedState('normal')
       bump()
     },
     [bump],
@@ -122,7 +133,43 @@ export function DriftTunnelProvider({ children }: { children: ReactNode }) {
     bump()
   }, [bump])
 
-  const value = useMemo<DriftSession>(
+  const commitDailyRanked = useCallback(() => {
+    commitDailyRankedAttempt(worldRef.current)
+    bump()
+  }, [bump])
+
+  const clearDailyLocal = useCallback(() => {
+    if (!isDailyLocalhost()) return
+    clearDailyProgress(worldRef.current)
+    bump()
+  }, [bump])
+
+  const setDailyDateLocal = useCallback(
+    (date: string) => {
+      if (!isDailyLocalhost()) return
+      setDailyDate(worldRef.current, date)
+      bump()
+    },
+    [bump],
+  )
+
+  const shiftDailyDateLocal = useCallback(
+    (days: number) => {
+      if (!isDailyLocalhost()) return
+      const next = shiftUtcDate(worldRef.current.dailyDate, days)
+      setDailyDate(worldRef.current, next)
+      bump()
+    },
+    [bump],
+  )
+
+  const resetDailyDateToToday = useCallback(() => {
+    if (!isDailyLocalhost()) return
+    setDailyDate(worldRef.current, utcDateKey())
+    bump()
+  }, [bump])
+
+  const value = useMemo<FwdSession>(
     () => ({
       worldRef,
       inputRef,
@@ -143,6 +190,12 @@ export function DriftTunnelProvider({ children }: { children: ReactNode }) {
       replaySeed,
       goNext,
       goPrev,
+      commitDailyRanked,
+      clearDailyLocal,
+      setDailyDateLocal,
+      shiftDailyDateLocal,
+      resetDailyDateToToday,
+      isLocalhost: isDailyLocalhost(),
       levelTotal: exploreLevelTotal(),
       hint: worldRef.current.hint,
     }),
@@ -161,14 +214,19 @@ export function DriftTunnelProvider({ children }: { children: ReactNode }) {
       replaySeed,
       goNext,
       goPrev,
+      commitDailyRanked,
+      clearDailyLocal,
+      setDailyDateLocal,
+      shiftDailyDateLocal,
+      resetDailyDateToToday,
     ],
   )
 
-  return <DriftContext.Provider value={value}>{children}</DriftContext.Provider>
+  return <FwdContext.Provider value={value}>{children}</FwdContext.Provider>
 }
 
-export function useDriftTunnel(): DriftSession {
-  const ctx = useContext(DriftContext)
-  if (!ctx) throw new Error('useDriftTunnel must be used within DriftTunnelProvider')
+export function useFwd(): FwdSession {
+  const ctx = useContext(FwdContext)
+  if (!ctx) throw new Error('useFwd must be used within FwdProvider')
   return ctx
 }

@@ -1,5 +1,21 @@
 import { getLevel, levelCount } from './levels'
 import { generateChunk, nextSeed } from './procedural'
+import {
+  buildDailyCourse,
+  clearDailyDay,
+  commitDailyRanked,
+  dailyBest,
+  emptyDailyRecord,
+  isDailyComplete,
+  isDailyLocalhost,
+  isDailyPractice,
+  isValidUtcDateKey,
+  loadDailyRecord,
+  recordDailyClear,
+  recordDailyDeath,
+  utcDateKey,
+  type DailyRecord,
+} from './daily'
 import { cloneRings, getTile, isWalkable, solidRing } from './tunnel'
 import {
   BASE_SPEED,
@@ -19,10 +35,10 @@ import {
   STRAFE_ACCEL,
   STRAFE_FRICTION,
   TUNNEL_HALF,
-  type DriftInput,
-  type DriftMode,
-  type DriftPhase,
-  type DriftSnapshot,
+  type FwdInput,
+  type FwdMode,
+  type FwdPhase,
+  type FwdSnapshot,
   type ExploreGhostRun,
   type FaceIndex,
   type GhostSample,
@@ -31,10 +47,10 @@ import {
   type SpeedPreset,
 } from './types'
 
-const LEVEL_TIMES_KEY = 'drift-tunnel-level-times-v1'
-const INFINITE_DISTANCE_KEY = 'drift-tunnel-infinite-distance-v1'
-const INFINITE_SCORE_KEY = 'drift-tunnel-infinite-score-v1'
-const EXPLORE_GHOSTS_KEY = 'drift-tunnel-explore-ghosts-v1'
+const LEVEL_TIMES_KEY = 'fwd-level-times-v1'
+const INFINITE_DISTANCE_KEY = 'fwd-infinite-distance-v1'
+const INFINITE_SCORE_KEY = 'fwd-infinite-score-v1'
+const EXPLORE_GHOSTS_KEY = 'fwd-explore-ghosts-v1'
 const STREAM_AHEAD = 48
 const CULL_BEHIND = 12
 const RUN_START_Z = 1.2
@@ -45,9 +61,9 @@ const SUPPORT_OVERHANG = RING_DEPTH * 0.1
 /** Keep swept movement shorter than the narrowest collision feature. */
 const MAX_PHYSICS_STEP = SUPPORT_OVERHANG * 0.5
 
-export type DriftWorld = {
-  mode: DriftMode
-  phase: DriftPhase
+export type FwdWorld = {
+  mode: FwdMode
+  phase: FwdPhase
   levelIndex: number
   levelName: string
   hint: string
@@ -90,6 +106,8 @@ export type DriftWorld = {
   falling: boolean
   supportRing: number
   supportFace: FaceIndex
+  dailyDate: string
+  dailyRecord: DailyRecord
 }
 
 function readStorage<T>(key: string, fallback: T): T {
@@ -206,7 +224,7 @@ function loadExploreGhost(levelIndex: number): ExploreGhostRun | null {
   return { elapsed: candidate.elapsed, samples }
 }
 
-function recordGhostSample(world: DriftWorld, force = false) {
+function recordGhostSample(world: FwdWorld, force = false) {
   if (world.mode !== 'explore') return
   if (!force && world.ghostSampleAccumulator < GHOST_SAMPLE_INTERVAL) return
   if (!force) world.ghostSampleAccumulator -= GHOST_SAMPLE_INTERVAL
@@ -222,7 +240,7 @@ function recordGhostSample(world: DriftWorld, force = false) {
   ])
 }
 
-function saveExploreGhost(world: DriftWorld) {
+function saveExploreGhost(world: FwdWorld) {
   recordGhostSample(world, true)
   if (world.runSamples.length < 2) return
   const leaderboardBest = world.levelTimes[0] ?? Number.POSITIVE_INFINITY
@@ -276,7 +294,7 @@ function baseSpeed(preset: SpeedPreset): number {
   return BASE_SPEED[preset]
 }
 
-function boostedSpeed(world: DriftWorld): number {
+function boostedSpeed(world: FwdWorld): number {
   return (
     baseSpeed(world.speedPreset) *
     (1 + (BOOST_MULT - 1) * world.boostPower)
@@ -284,11 +302,11 @@ function boostedSpeed(world: DriftWorld): number {
 }
 
 export function createWorld(
-  mode: DriftMode = 'explore',
+  mode: FwdMode = 'explore',
   levelIndex = 0,
   speedPreset: SpeedPreset = 'normal',
-): DriftWorld {
-  const world: DriftWorld = {
+): FwdWorld {
+  const world: FwdWorld = {
     mode,
     phase: 'idle',
     levelIndex,
@@ -333,6 +351,8 @@ export function createWorld(
     falling: false,
     supportRing: 1,
     supportFace: 0,
+    dailyDate: utcDateKey(),
+    dailyRecord: emptyDailyRecord(utcDateKey()),
   }
   resetRun(world, mode, levelIndex)
   world.phase = 'idle'
@@ -340,12 +360,15 @@ export function createWorld(
 }
 
 export function resetRun(
-  world: DriftWorld,
-  mode: DriftMode = world.mode,
+  world: FwdWorld,
+  mode: FwdMode = world.mode,
   levelIndex: number = world.levelIndex,
   infiniteSeedLabel?: string,
 ) {
   world.mode = mode
+  if (mode === 'daily') {
+    world.speedPreset = 'normal'
+  }
   world.levelIndex = levelIndex
   world.ringOffset = 0
   world.z = RUN_START_Z
@@ -391,9 +414,20 @@ export function resetRun(
     world.ghostRun = loadExploreGhost(levelIndex)
     world.seedLabel = ''
     world.runSamples = [[0, 0, 0, 0, 0]]
+  } else if (mode === 'daily') {
+    const date = isValidUtcDateKey(world.dailyDate) ? world.dailyDate : utcDateKey()
+    const course = buildDailyCourse(date)
+    world.dailyDate = course.date
+    world.dailyRecord = loadDailyRecord(course.date)
+    world.levelName = `Daily #${course.puzzleNumber}`
+    world.hint = 'Practice freely, then lock in one ranked clear. Deaths only count after you go ranked.'
+    world.rings = course.rings
+    world.levelTimes = []
+    world.seedLabel = course.date
+    world.runSeed = course.seed
   } else {
     world.levelName = 'Infinite'
-    world.hint = 'How far can you drift?'
+    world.hint = 'How far can you go?'
     world.seedLabel = infiniteSeedLabel?.trim() || randomSeedLabel()
     world.runSeed = hashSeed(world.seedLabel)
     world.seed = world.runSeed
@@ -404,13 +438,36 @@ export function resetRun(
   }
 }
 
-export function setSpeedPreset(world: DriftWorld, preset: SpeedPreset) {
+export function commitDailyRankedAttempt(world: FwdWorld) {
+  if (world.mode !== 'daily') return
+  world.dailyRecord = commitDailyRanked(world.dailyDate)
+}
+
+export function clearDailyProgress(world: FwdWorld) {
+  if (world.mode !== 'daily') return
+  const date = world.dailyDate
+  world.dailyRecord = clearDailyDay(date)
+  world.dailyDate = date
+  resetRun(world, 'daily')
+  world.phase = 'idle'
+}
+
+export function setDailyDate(world: FwdWorld, date: string) {
+  if (world.mode !== 'daily') return
+  if (!isDailyLocalhost() || !isValidUtcDateKey(date)) return
+  world.dailyDate = date
+  resetRun(world, 'daily')
+  world.phase = 'idle'
+}
+
+export function setSpeedPreset(world: FwdWorld, preset: SpeedPreset) {
+  if (world.mode === 'daily') return
   world.speedPreset = preset
   world.speed =
     world.boostPower > 0 ? boostedSpeed(world) : baseSpeed(world.speedPreset)
 }
 
-export function startRun(world: DriftWorld) {
+export function startRun(world: FwdWorld) {
   if (world.phase === 'idle') {
     world.phase = 'racing'
   } else if (world.phase === 'failed' || world.phase === 'cleared') {
@@ -418,21 +475,21 @@ export function startRun(world: DriftWorld) {
   }
 }
 
-export function startInfiniteSeed(world: DriftWorld, seedLabel: string) {
+export function startInfiniteSeed(world: FwdWorld, seedLabel: string) {
   resetRun(world, 'infinite', 0, seedLabel)
 }
 
-export function nextLevel(world: DriftWorld) {
+export function nextLevel(world: FwdWorld) {
   const next = (world.levelIndex + 1) % levelCount()
   resetRun(world, 'explore', next)
 }
 
-export function prevLevel(world: DriftWorld) {
+export function prevLevel(world: FwdWorld) {
   const prev = (world.levelIndex - 1 + levelCount()) % levelCount()
   resetRun(world, 'explore', prev)
 }
 
-export function switchMode(world: DriftWorld, mode: DriftMode) {
+export function switchMode(world: FwdWorld, mode: FwdMode) {
   resetRun(world, mode, mode === 'explore' ? world.levelIndex : 0)
   world.phase = 'idle'
 }
@@ -441,11 +498,11 @@ export function exploreLevelTotal(): number {
   return levelCount()
 }
 
-function ringIndexAt(world: DriftWorld, z: number): number {
+function ringIndexAt(world: FwdWorld, z: number): number {
   return Math.floor(z / RING_DEPTH) - world.ringOffset
 }
 
-function tileUnder(world: DriftWorld) {
+function tileUnder(world: FwdWorld) {
   const idx = ringIndexAt(world, world.z)
   return getTile(world.rings, idx, world.face)
 }
@@ -460,7 +517,7 @@ type SupportInfo = {
  * The lip exists only inside a gap, so the rendered geometry stays honest.
  */
 function supportAt(
-  world: DriftWorld,
+  world: FwdWorld,
   z = world.z,
   face = world.face,
 ): SupportInfo | null {
@@ -481,7 +538,7 @@ function supportAt(
   return null
 }
 
-function ensureStream(world: DriftWorld) {
+function ensureStream(world: FwdWorld) {
   if (world.mode !== 'infinite') return
   const playerRing = Math.floor(world.z / RING_DEPTH)
   const localIdx = playerRing - world.ringOffset
@@ -498,7 +555,7 @@ function ensureStream(world: DriftWorld) {
   }
 }
 
-function tryFlip(world: DriftWorld, input: DriftInput): boolean {
+function tryFlip(world: FwdWorld, input: FwdInput): boolean {
   if (world.flipCooldown > 0 || world.falling) return false
   // Allow grounded flips and mid-air latch flips (Run-like)
   if (world.height > 1.8) return false
@@ -538,7 +595,7 @@ function tryFlip(world: DriftWorld, input: DriftInput): boolean {
   return false
 }
 
-function boostSegmentKey(world: DriftWorld, support: SupportInfo): string {
+function boostSegmentKey(world: FwdWorld, support: SupportInfo): string {
   const face = world.face
   let start = support.absRing
   let end = support.absRing
@@ -556,7 +613,7 @@ function boostSegmentKey(world: DriftWorld, support: SupportInfo): string {
   return `${face}:${start}:${end}`
 }
 
-function applyTileEffects(world: DriftWorld, support: SupportInfo | null) {
+function applyTileEffects(world: FwdWorld, support: SupportInfo | null) {
   if (!support) return
 
   if (support.tile.kind === 'boost') {
@@ -582,7 +639,7 @@ function applyTileEffects(world: DriftWorld, support: SupportInfo | null) {
   }
 }
 
-function leaveSupport(world: DriftWorld) {
+function leaveSupport(world: FwdWorld) {
   const idx = world.supportRing - world.ringOffset
   const t = getTile(world.rings, idx, world.supportFace)
   if (t?.kind === 'crumble' && t.contacted) {
@@ -590,7 +647,7 @@ function leaveSupport(world: DriftWorld) {
   }
 }
 
-function canBeginBoostDecay(world: DriftWorld): boolean {
+function canBeginBoostDecay(world: FwdWorld): boolean {
   return (
     !world.falling &&
     world.height <= 0.001 &&
@@ -598,7 +655,7 @@ function canBeginBoostDecay(world: DriftWorld): boolean {
   )
 }
 
-export function stepWorld(world: DriftWorld, dt: number, input: DriftInput) {
+export function stepWorld(world: FwdWorld, dt: number, input: FwdInput) {
   if (world.phase !== 'racing' || !world.alive) return
 
   const clampedDt = Math.min(dt, 0.05)
@@ -666,18 +723,22 @@ export function stepWorld(world: DriftWorld, dt: number, input: DriftInput) {
     }
   }
 
-  if (world.mode === 'explore') {
+  if (world.mode !== 'infinite') {
     const endZ = world.rings.length * RING_DEPTH - RING_DEPTH * 0.5
     if (world.z >= endZ) {
       world.phase = 'cleared'
       world.alive = false
-      world.levelTimes = saveLevelTime(world.levelIndex, world.elapsed)
-      saveExploreGhost(world)
+      if (world.mode === 'explore') {
+        world.levelTimes = saveLevelTime(world.levelIndex, world.elapsed)
+        saveExploreGhost(world)
+      } else {
+        world.dailyRecord = recordDailyClear(world.dailyDate, world.elapsed)
+      }
     }
   }
 }
 
-function stepMotion(world: DriftWorld, dt: number, input: DriftInput) {
+function stepMotion(world: FwdWorld, dt: number, input: FwdInput) {
   if (world.falling) {
     world.jumpBufferT = Math.max(0, world.jumpBufferT - dt)
     world.coyoteT = Math.max(0, world.coyoteT - dt)
@@ -786,7 +847,7 @@ function stepMotion(world: DriftWorld, dt: number, input: DriftInput) {
   }
 }
 
-function fail(world: DriftWorld) {
+function fail(world: FwdWorld) {
   world.distance = Math.max(0, world.z - RUN_START_Z)
   world.score =
     world.mode === 'infinite'
@@ -803,10 +864,13 @@ function fail(world: DriftWorld) {
     world.distanceLeaders = leaders.distanceLeaders
     world.scoreLeaders = leaders.scoreLeaders
     world.bestDistance = leaders.distanceLeaders[0]?.distance ?? world.distance
+  } else if (world.mode === 'daily') {
+    world.dailyRecord = recordDailyDeath(world.dailyDate)
   }
 }
 
-export function snapshot(world: DriftWorld): DriftSnapshot {
+export function snapshot(world: FwdWorld): FwdSnapshot {
+  const best = dailyBest(world.dailyRecord)
   return {
     phase: world.phase,
     mode: world.mode,
@@ -829,11 +893,21 @@ export function snapshot(world: DriftWorld): DriftSnapshot {
     boostStacks: world.boostStacks,
     alive: world.alive,
     ringsAhead: Math.max(0, world.rings.length - ringIndexAt(world, world.z)),
+    dailyDate: world.dailyDate,
+    dailyPuzzleNumber: world.dailyRecord.puzzleNumber,
+    dailyClears: world.dailyRecord.clears.map((clear) => clear.elapsed),
+    dailyDeaths: world.dailyRecord.deaths,
+    dailyStreak: world.dailyRecord.streak,
+    dailyBestTime: best?.elapsed ?? 0,
+    dailyBestAttempt: best?.attempt ?? 0,
+    dailyPractice: isDailyPractice(world.dailyRecord),
+    dailyRankedCommitted: world.dailyRecord.rankedCommitted,
+    dailyCompleted: isDailyComplete(world.dailyRecord),
   }
 }
 
 /** World-space position of the runner. */
-export function playerWorldPos(world: DriftWorld): {
+export function playerWorldPos(world: FwdWorld): {
   x: number
   y: number
   z: number
@@ -867,7 +941,7 @@ function stateWorldPos(
   return { x, y, z, up, right }
 }
 
-export function ghostWorldPos(world: DriftWorld): {
+export function ghostWorldPos(world: FwdWorld): {
   x: number
   y: number
   z: number

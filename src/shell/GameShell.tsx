@@ -3,7 +3,7 @@ import { BounceRaceShell } from '../games/bounce-race'
 import { BubbleWarShell } from '../games/bubble-war'
 import { CascadeTycoonShell } from '../games/cascade-tycoon'
 import { DominoHeistShell } from '../games/domino-heist'
-import { DriftTunnelShell } from '../games/drift-tunnel'
+import { FwdShell } from '../games/fwd'
 import { LaserRouletteShell } from '../games/laser-roulette'
 import { PerfectClearShell } from '../games/perfect-clear'
 import { SquishFitShell } from '../games/squish-fit'
@@ -130,8 +130,8 @@ export function GameShell({ module }: GameShellProps) {
     return <SquishFitShell>{content}</SquishFitShell>
   }
 
-  if (module.id === 'drift-tunnel') {
-    return <DriftTunnelShell>{content}</DriftTunnelShell>
+  if (module.id === 'fwd') {
+    return <FwdShell>{content}</FwdShell>
   }
 
   return content

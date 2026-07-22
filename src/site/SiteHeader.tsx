@@ -3,7 +3,7 @@ import { DEFAULT_PUBLIC_GAME_ID } from '../catalog/games'
 import { SITE_NAME } from './content'
 
 type SiteHeaderProps = {
-  /** Show the public Drift link (home + play). Studio never links here from public chrome. */
+  /** Show the public game link (home + play). Studio never links here from public chrome. */
   showPlayLink?: boolean
 }
 

@@ -7,7 +7,7 @@ import {
   SITE_NAME,
   SITE_TAGLINE,
 } from './content'
-import { SiteHeader } from './SiteHeader'
+import { HomeBackground } from './HomeBackground'
 import { useDocumentTitle } from './useDocumentTitle'
 
 export function HomePage() {
@@ -15,7 +15,7 @@ export function HomePage() {
 
   return (
     <div className="site site--home">
-      <SiteHeader />
+      <HomeBackground />
       <main className="home">
         <p className="home__tagline">{SITE_TAGLINE}</p>
         <h1 className="home__headline">{HOME_HEADLINE}</h1>
