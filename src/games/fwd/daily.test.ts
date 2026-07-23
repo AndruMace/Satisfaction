@@ -146,12 +146,38 @@ describe('daily ranked results', () => {
 
   it('ignores malformed persisted data', () => {
     const storage = new MemoryStorage()
-    storage.setItem(DAILY_STORAGE_KEY, '{"version":2,"days":{"2026-07-22":{"bad":true}}}')
+    storage.setItem(DAILY_STORAGE_KEY, '{"version":3,"days":{"2026-07-22":{"bad":true}}}')
     expect(loadDailyRecord('2026-07-22', storage)).toMatchObject({
       rankedCommitted: false,
       clears: [],
       deaths: 0,
       streak: 0,
+    })
+  })
+
+  it('does not reuse ranked state from the former UTC calendar', () => {
+    const storage = new MemoryStorage()
+    storage.setItem(
+      DAILY_STORAGE_KEY,
+      JSON.stringify({
+        version: 2,
+        days: {
+          '2026-07-23': {
+            date: '2026-07-23',
+            puzzleNumber: 2,
+            rankedCommitted: true,
+            clears: [],
+            deaths: 3,
+            streak: 0,
+          },
+        },
+      }),
+    )
+
+    expect(loadDailyRecord('2026-07-23', storage)).toMatchObject({
+      rankedCommitted: false,
+      clears: [],
+      deaths: 0,
     })
   })
 

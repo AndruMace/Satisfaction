@@ -2,7 +2,11 @@ import { RING_DEPTH, type FaceIndex, type Ring, type TileKind } from './types'
 import { cloneRings, ring, solidRing } from './tunnel'
 
 export const DAILY_MAX_CLEARS = 1
-export const DAILY_STORAGE_KEY = 'fwd-daily-v2'
+/**
+ * Local-calendar migration intentionally starts fresh. UTC records can share a
+ * date key with the following local day, so they cannot be migrated safely.
+ */
+export const DAILY_STORAGE_KEY = 'fwd-daily-v3'
 export const DAILY_LAUNCH_EPOCH = '2026-07-22'
 
 const DAY_MS = 86_400_000
@@ -25,7 +29,7 @@ export type DailyRecord = {
 }
 
 type DailyHistory = {
-  version: 2
+  version: 3
   days: Record<string, DailyRecord>
 }
 
@@ -136,21 +140,21 @@ function validRecord(value: unknown, date: string): value is DailyRecord {
 }
 
 function emptyHistory(): DailyHistory {
-  return { version: 2, days: {} }
+  return { version: 3, days: {} }
 }
 
 function readHistory(storage: StorageLike | null = getStorage()): DailyHistory {
   if (!storage) return emptyHistory()
   try {
     const parsed = JSON.parse(storage.getItem(DAILY_STORAGE_KEY) ?? '')
-    if (!parsed || parsed.version !== 2 || typeof parsed.days !== 'object') {
+    if (!parsed || parsed.version !== 3 || typeof parsed.days !== 'object') {
       return emptyHistory()
     }
     const days: Record<string, DailyRecord> = {}
     for (const [date, value] of Object.entries(parsed.days as Record<string, unknown>)) {
       if (validRecord(value, date)) days[date] = value
     }
-    return { version: 2, days }
+    return { version: 3, days }
   } catch {
     return emptyHistory()
   }

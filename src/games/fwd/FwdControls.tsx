@@ -102,7 +102,7 @@ export function FwdControls({ shell }: GameControlsProps) {
         <section className="fwd-daily-panel" aria-label="Daily puzzle progress">
           <div className="fwd-daily-panel__heading">
             <div>
-              <span className="fwd-daily-panel__eyebrow">UTC daily puzzle</span>
+              <span className="fwd-daily-panel__eyebrow">Daily puzzle</span>
               <strong>Fwd Daily #{snap.dailyPuzzleNumber}</strong>
             </div>
             <span
