@@ -8,11 +8,11 @@ import {
   dailyPuzzleNumber,
   formatDailyShare,
   hashDailySeed,
+  localDateKey,
   loadDailyRecord,
   previousUtcDate,
   recordDailyClear,
   recordDailyDeath,
-  utcDateKey,
   validateDailyCourse,
 } from './daily'
 import {
@@ -51,8 +51,8 @@ function kinds(course: ReturnType<typeof buildDailyCourse>): string {
 }
 
 describe('daily identity and generation', () => {
-  it('uses stable UTC dates, puzzle numbers, and seeds', () => {
-    expect(utcDateKey(new Date('2026-07-22T23:59:59-05:00'))).toBe('2026-07-23')
+  it('uses the player local date with stable puzzle numbers and seeds', () => {
+    expect(localDateKey(new Date(2026, 6, 22, 23, 59, 59))).toBe('2026-07-22')
     expect(dailyPuzzleNumber('2026-07-22')).toBe(1)
     expect(dailyPuzzleNumber('2026-07-23')).toBe(2)
     expect(previousUtcDate('2026-08-01')).toBe('2026-07-31')

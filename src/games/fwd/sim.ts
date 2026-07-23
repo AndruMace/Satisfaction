@@ -10,10 +10,10 @@ import {
   isDailyLocalhost,
   isDailyPractice,
   isValidUtcDateKey,
+  localDateKey,
   loadDailyRecord,
   recordDailyClear,
   recordDailyDeath,
-  utcDateKey,
   type DailyRecord,
 } from './daily'
 import { cloneRings, getTile, isWalkable, solidRing } from './tunnel'
@@ -360,8 +360,8 @@ export function createWorld(
     fallingT: 0,
     supportRing: 1,
     supportFace: 0,
-    dailyDate: utcDateKey(),
-    dailyRecord: emptyDailyRecord(utcDateKey()),
+    dailyDate: localDateKey(),
+    dailyRecord: emptyDailyRecord(localDateKey()),
   }
   resetRun(world, mode, levelIndex)
   world.phase = 'idle'
@@ -425,7 +425,10 @@ export function resetRun(
     world.seedLabel = ''
     world.runSamples = [[0, 0, 0, 0, 0]]
   } else if (mode === 'daily') {
-    const date = isValidUtcDateKey(world.dailyDate) ? world.dailyDate : utcDateKey()
+    const date =
+      isDailyLocalhost() && isValidUtcDateKey(world.dailyDate)
+        ? world.dailyDate
+        : localDateKey()
     const course = buildDailyCourse(date)
     world.dailyDate = course.date
     world.dailyRecord = loadDailyRecord(course.date)

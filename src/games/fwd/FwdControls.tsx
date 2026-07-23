@@ -152,11 +152,11 @@ export function FwdControls({ shell }: GameControlsProps) {
           {fwd.isLocalhost && (
             <div className="fwd-daily-debug">
               <label className="fwd-daily-debug__date">
-                <span>UTC date</span>
+                <span>Daily date</span>
                 <input
                   type="date"
                   value={snap.dailyDate}
-                  aria-label="Daily puzzle UTC date"
+                  aria-label="Daily puzzle date"
                   onChange={(event) => fwd.setDailyDateLocal(event.target.value)}
                 />
               </label>

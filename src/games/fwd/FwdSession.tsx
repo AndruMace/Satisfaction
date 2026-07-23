@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -26,7 +27,7 @@ import {
   type FwdWorld,
 } from './sim'
 import type { FwdMode, FwdSnapshot, SpeedPreset } from './types'
-import { isDailyLocalhost, shiftUtcDate, utcDateKey } from './daily'
+import { isDailyLocalhost, localDateKey, shiftUtcDate } from './daily'
 
 export type FwdSession = {
   worldRef: MutableRefObject<FwdWorld>
@@ -74,6 +75,34 @@ export function FwdProvider({ children }: { children: ReactNode }) {
     setSnap(snapshot(worldRef.current))
     setResetKey((k) => k + 1)
   }, [])
+
+  useEffect(() => {
+    if (isDailyLocalhost()) return
+
+    const syncLocalDay = () => {
+      const world = worldRef.current
+      const today = localDateKey()
+      if (world.mode !== 'daily' || world.dailyDate === today || world.phase === 'racing') {
+        return
+      }
+      world.dailyDate = today
+      resetRun(world, 'daily')
+      world.phase = 'idle'
+      bump()
+    }
+
+    const interval = window.setInterval(syncLocalDay, 30_000)
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') syncLocalDay()
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    syncLocalDay()
+
+    return () => {
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [bump])
 
   const setMode = useCallback(
     (m: FwdMode) => {
@@ -165,7 +194,7 @@ export function FwdProvider({ children }: { children: ReactNode }) {
 
   const resetDailyDateToToday = useCallback(() => {
     if (!isDailyLocalhost()) return
-    setDailyDate(worldRef.current, utcDateKey())
+    setDailyDate(worldRef.current, localDateKey())
     bump()
   }, [bump])
 

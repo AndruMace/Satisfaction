@@ -64,8 +64,16 @@ export function isDailyLocalhost(): boolean {
   return host === 'localhost' || host === '127.0.0.1' || host === '[::1]'
 }
 
-export function utcDateKey(date = new Date()): string {
+function utcDateKey(date: Date): string {
   return date.toISOString().slice(0, 10)
+}
+
+/** Calendar date where the player is, so their daily resets at local midnight. */
+export function localDateKey(date = new Date()): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 function parseUtcDate(dateKey: string): number {
@@ -169,7 +177,7 @@ export function emptyDailyRecord(date: string): DailyRecord {
 }
 
 export function loadDailyRecord(
-  date = utcDateKey(),
+  date = localDateKey(),
   storage: StorageLike | null = getStorage(),
 ): DailyRecord {
   const record = readHistory(storage).days[date]
@@ -554,7 +562,7 @@ function fallbackCourse(): Ring[] {
   return rings
 }
 
-export function buildDailyCourse(date = utcDateKey()): DailyCourse {
+export function buildDailyCourse(date = localDateKey()): DailyCourse {
   const initialSeed = hashDailySeed(`fwd-daily:${date}`)
   for (let attempt = 0; attempt < MAX_GENERATION_ATTEMPTS; attempt++) {
     const seed = (initialSeed + Math.imul(attempt, 0x9e3779b1)) >>> 0 || 1
