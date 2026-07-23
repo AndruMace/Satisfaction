@@ -1341,6 +1341,14 @@ body:has(.suite--fwd) {
   line-height: 1.4;
 }
 
+.fwd-overlay__warning {
+  max-width: 18.5rem;
+  color: #ffe082;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
 .fwd-overlay__key-hint {
   display: none;
   color: rgba(229, 233, 255, 0.58);

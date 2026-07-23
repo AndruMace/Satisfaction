@@ -122,6 +122,11 @@ export function FwdGameView({ shell }: GameViewProps) {
                     ? 'Auto-run, jump gaps, flip onto walls. Practice doesn’t count — start ranked when you’re ready.'
                     : 'Auto-run, jump gaps, flip onto walls. Deaths don’t end the attempt — only a clear locks it in.'}
               </span>
+              {(snap.dailyPractice || snap.dailyCompleted) && (
+                <span className="fwd-overlay__warning">
+                  Today’s challenge is difficult. New here? Try the Explore levels first.
+                </span>
+              )}
             </>
           ) : (
             <>
