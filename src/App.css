@@ -1229,13 +1229,16 @@ body:has(.suite--fwd) {
   position: relative;
   width: 100%;
   height: 100%;
+}
+
+.fwd-layout--playing {
   touch-action: none;
   overscroll-behavior: contain;
   -webkit-touch-callout: none;
 }
 
-.fwd-layout,
-.fwd-layout * {
+.fwd-layout--playing,
+.fwd-layout--playing * {
   -webkit-user-select: none;
   user-select: none;
   -webkit-user-drag: none;
@@ -1245,6 +1248,10 @@ body:has(.suite--fwd) {
   width: 100%;
   height: 100%;
   display: block;
+  touch-action: auto;
+}
+
+.fwd-layout--playing .fwd-canvas {
   touch-action: none;
 }
 

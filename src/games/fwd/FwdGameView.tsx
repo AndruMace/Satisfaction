@@ -41,7 +41,7 @@ export function FwdGameView({ shell }: GameViewProps) {
       : 'RANKED'
 
   return (
-    <div className="fwd-layout">
+    <div className={`fwd-layout${snap.phase === 'racing' ? ' fwd-layout--playing' : ''}`}>
       <FwdCanvas
         worldRef={fwd.worldRef}
         running={fwd.running}
