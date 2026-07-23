@@ -23,6 +23,7 @@ import {
   startRun,
   stepWorld,
 } from './sim'
+import { getLevel, levelCount } from './levels'
 import { RING_DEPTH } from './types'
 import { ring, solidRing } from './tunnel'
 
@@ -326,5 +327,17 @@ describe('landing forgiveness', () => {
 
     expect(world.face).toBe(0)
     expect(world.falling).toBe(true)
+  })
+})
+
+describe('explore level openings', () => {
+  it('gives every level a safe floor buffer before the first jump', () => {
+    for (let index = 0; index < levelCount(); index++) {
+      const level = getLevel(index)
+      expect(
+        level.rings.slice(0, 8).every((openingRing) => openingRing[0].kind !== 'gap'),
+        level.name,
+      ).toBe(true)
+    }
   })
 })

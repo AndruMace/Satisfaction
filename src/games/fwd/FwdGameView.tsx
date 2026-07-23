@@ -33,7 +33,7 @@ export function FwdGameView({ shell }: GameViewProps) {
   useEffect(() => {
     if (snap.phase !== 'failed') return
     const retryWithKeyboard = (event: KeyboardEvent) => {
-      if (event.code !== 'KeyR' || event.repeat || event.metaKey || event.ctrlKey || event.altKey) {
+      if (event.code !== 'Space' || event.repeat || event.metaKey || event.ctrlKey || event.altKey) {
         return
       }
       event.preventDefault()
@@ -159,7 +159,7 @@ export function FwdGameView({ shell }: GameViewProps) {
               {snap.levelName} · {formatRunTime(snap.elapsed)}
             </span>
           )}
-          <span className="fwd-overlay__key-hint">Press R to retry</span>
+          <span className="fwd-overlay__key-hint">Press Space to retry</span>
           <button type="button" className="btn btn--primary" onClick={() => fwd.retry()}>
             Retry
           </button>

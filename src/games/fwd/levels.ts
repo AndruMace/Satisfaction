@@ -58,7 +58,7 @@ const LEVELS: ExploreLevel[] = [
     name: 'Wall Walk',
     hint: 'Hold right near the edge to flip onto the wall.',
     rings: [
-      ...pad(3),
+      ...pad(6),
       boostOn(3),
       ...pad(2),
       ...stretch(gapOn(0), 5),
@@ -97,7 +97,7 @@ const LEVELS: ExploreLevel[] = [
     name: 'Ceiling Hop',
     hint: 'Flip twice to run on the ceiling past long floor gaps.',
     rings: [
-      ...pad(2),
+      ...pad(6),
       boostOn(2),
       ...pad(2),
       ...stretch(ring('gap', 'solid', 'solid', 'solid'), 4),
@@ -265,7 +265,7 @@ const LEVELS: ExploreLevel[] = [
     name: 'Spiral',
     hint: 'Gaps rotate around the tunnel — flip with the pattern.',
     rings: [
-      ...pad(2),
+      ...pad(6),
       boostOn(1),
       ...pad(1),
       ...stretch(gapOn(0), 2),
@@ -336,7 +336,7 @@ const LEVELS: ExploreLevel[] = [
     name: 'Mixed Signal',
     hint: 'Ice, crumble, and boost in one conduit.',
     rings: [
-      ...pad(1),
+      ...pad(4),
       boostOn(3),
       ...pad(1),
       ...stretch(ring('ice', 'solid', 'crumble', 'solid'), 3),
@@ -362,7 +362,7 @@ const LEVELS: ExploreLevel[] = [
     name: 'Void Gate',
     hint: 'Final explore run. Flip hard. Don’t hesitate.',
     rings: [
-      ...pad(2),
+      ...pad(6),
       boostOn(1),
       ...stretch(ring('boost', 'solid', 'solid', 'solid'), 1),
       ...stretch(ring('gap', 'solid', 'gap', 'solid'), 3),
