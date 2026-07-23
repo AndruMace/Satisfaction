@@ -30,6 +30,19 @@ export function FwdGameView({ shell }: GameViewProps) {
     if (snap.phase !== 'racing') fwd.inputRef.current?.reset()
   }, [snap.phase, fwd.inputRef])
 
+  useEffect(() => {
+    if (snap.phase !== 'failed') return
+    const retryWithKeyboard = (event: KeyboardEvent) => {
+      if (event.code !== 'KeyR' || event.repeat || event.metaKey || event.ctrlKey || event.altKey) {
+        return
+      }
+      event.preventDefault()
+      fwd.retry()
+    }
+    window.addEventListener('keydown', retryWithKeyboard)
+    return () => window.removeEventListener('keydown', retryWithKeyboard)
+  }, [snap.phase, fwd.retry])
+
   const onTouch = (partial: { left?: boolean; right?: boolean; jump?: boolean }) => {
     fwd.inputRef.current?.setTouch(partial)
   }
@@ -146,9 +159,22 @@ export function FwdGameView({ shell }: GameViewProps) {
               {snap.levelName} · {formatRunTime(snap.elapsed)}
             </span>
           )}
+          <span className="fwd-overlay__key-hint">Press R to retry</span>
           <button type="button" className="btn btn--primary" onClick={() => fwd.retry()}>
             Retry
           </button>
+          {snap.mode === 'daily' && !snap.dailyRankedCommitted && !snap.dailyCompleted && (
+            <button
+              type="button"
+              className="btn fwd-ranked-start"
+              onClick={() => {
+                fwd.commitDailyRanked()
+                fwd.retry()
+              }}
+            >
+              Begin Ranked Run
+            </button>
+          )}
         </div>
       )}
 

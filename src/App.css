@@ -1221,6 +1221,13 @@ body:has(.suite--fwd) {
   box-shadow: 0 0 22px rgba(0, 255, 213, 0.35);
 }
 
+.app--fwd .fwd-ranked-start {
+  border-color: rgba(255, 218, 92, 0.72);
+  background: linear-gradient(135deg, #d98513, #e8477f);
+  color: #ffffff;
+  box-shadow: 0 0 18px rgba(255, 177, 45, 0.28);
+}
+
 .app--fwd .stage__overlay--idle {
   display: none;
 }
@@ -1332,6 +1339,20 @@ body:has(.suite--fwd) {
   text-align: center;
   max-width: 18.5rem;
   line-height: 1.4;
+}
+
+.fwd-overlay__key-hint {
+  display: none;
+  color: rgba(229, 233, 255, 0.58);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .fwd-overlay__key-hint {
+    display: inline;
+  }
 }
 
 .fwd-hud__practice {
