@@ -129,6 +129,7 @@ export function FwdProvider({ children }: { children: ReactNode }) {
   }, [bump])
 
   const retry = useCallback(() => {
+    inputRef.current?.reset()
     resetRun(worldRef.current)
     bump()
   }, [bump])

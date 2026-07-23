@@ -3,6 +3,7 @@ import type { FwdInput } from './types'
 export type InputController = {
   get: () => FwdInput
   setTouch: (partial: Partial<FwdInput>) => void
+  reset: () => void
   dispose: () => void
 }
 
@@ -62,10 +63,13 @@ export function createInputController(target: HTMLElement): InputController {
   window.addEventListener('keydown', onKeyDown)
   window.addEventListener('keyup', onKeyUp)
 
-  // Blur safety
-  const onBlur = () => {
+  const reset = () => {
     keys.left = keys.right = keys.jump = false
+    touch.left = touch.right = touch.jump = false
   }
+
+  // Blur safety
+  const onBlur = () => reset()
   window.addEventListener('blur', onBlur)
 
   void target
@@ -81,6 +85,7 @@ export function createInputController(target: HTMLElement): InputController {
       if (partial.right !== undefined) touch.right = partial.right
       if (partial.jump !== undefined) touch.jump = partial.jump
     },
+    reset,
     dispose() {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)

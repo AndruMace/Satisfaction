@@ -26,6 +26,10 @@ export function FwdGameView({ shell }: GameViewProps) {
     return () => shell.setPhase('idle')
   }, [snap.phase, shell])
 
+  useEffect(() => {
+    if (snap.phase !== 'racing') fwd.inputRef.current?.reset()
+  }, [snap.phase, fwd.inputRef])
+
   const onTouch = (partial: { left?: boolean; right?: boolean; jump?: boolean }) => {
     fwd.inputRef.current?.setTouch(partial)
   }
