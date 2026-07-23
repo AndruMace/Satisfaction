@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#09071d"/>
+      <stop offset=".52" stop-color="#191044"/>
+      <stop offset="1" stop-color="#070f2a"/>
+    </linearGradient>
+    <linearGradient id="floor" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#44338d" stop-opacity=".8"/>
+      <stop offset="1" stop-color="#17103d" stop-opacity=".18"/>
+    </linearGradient>
+    <radialGradient id="glow">
+      <stop stop-color="#00ffd5" stop-opacity=".42"/>
+      <stop offset="1" stop-color="#00ffd5" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="cyanGlow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="220%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#03020e" flood-opacity=".65"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <ellipse cx="875" cy="270" rx="390" ry="350" fill="url(#glow)"/>
+
+  <!-- A neon tunnel racing toward the viewer. -->
+  <path d="M570 80 1180 0 1180 630 570 545Z" fill="url(#floor)"/>
+  <g fill="none" stroke="#765cff" stroke-width="4" opacity=".62">
+    <path d="M570 80 1180 0M570 545 1180 630"/>
+    <path d="M650 69 650 556M750 56 750 570M880 39 880 589M1030 19 1030 610"/>
+  </g>
+  <g fill="none" stroke="#00ffd5" opacity=".5">
+    <path d="M616 74 616 551" stroke-width="5"/>
+    <path d="M704 63 704 563" stroke-width="3"/>
+    <path d="M814 48 814 578" stroke-width="2"/>
+  </g>
+  <g fill="#00ffd5" filter="url(#cyanGlow)">
+    <path d="M675 485h118l-19 22H656Z"/>
+    <path d="M837 449h86l-14 17h-88Z" opacity=".75"/>
+  </g>
+
+  <!-- Title and premise. -->
+  <text x="76" y="195" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="132" font-weight="900" letter-spacing="-8">Fwd</text>
+  <rect x="82" y="225" width="80" height="8" rx="4" fill="#00ffd5"/>
+  <text x="78" y="288" fill="#d9d4ff" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" letter-spacing="5">DAILY TUNNEL RUN</text>
+  <text x="79" y="345" fill="#a8a0d2" font-family="Arial, Helvetica, sans-serif" font-size="25">Jump gaps. Switch walls.</text>
+  <text x="79" y="380" fill="#a8a0d2" font-family="Arial, Helvetica, sans-serif" font-size="25">Chase today&apos;s fastest line.</text>
+
+  <!-- The in-game jelly-bean mascot. -->
+  <g transform="translate(810 132) scale(1.35)" filter="url(#shadow)">
+    <ellipse cx="128" cy="221" rx="60" ry="14" fill="#15102e" opacity=".78"/>
+    <path d="M105 184 92 218M151 184l13 34" fill="none" stroke="#291a62" stroke-width="22" stroke-linecap="round"/>
+    <path d="M76 135 53 157M181 135l22 18" fill="none" stroke="#ff9d2e" stroke-width="14" stroke-linecap="round"/>
+    <path d="M72 145C70 75 92 45 130 45c44 0 60 40 54 106-3 39-25 53-57 53-33 0-54-20-55-59Z" fill="#ffcf4a" stroke="#fff6b0" stroke-width="8"/>
+    <g fill="#21133f">
+      <ellipse cx="108" cy="113" rx="12" ry="16"/>
+      <ellipse cx="151" cy="113" rx="12" ry="16"/>
+    </g>
+    <g fill="#fff">
+      <circle cx="104" cy="107" r="4"/>
+      <circle cx="147" cy="107" r="4"/>
+    </g>
+    <path d="M113 141a16 16 0 0 0 32 0" fill="none" stroke="#6b2254" stroke-width="6" stroke-linecap="round"/>
+    <g fill="#ff6f91">
+      <ellipse cx="91" cy="139" rx="10" ry="5"/>
+      <ellipse cx="167" cy="139" rx="10" ry="5"/>
+    </g>
+  </g>
+
+  <text x="82" y="566" fill="#706a9a" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" letter-spacing="3">A SATISFACTION GAME</text>
+</svg>

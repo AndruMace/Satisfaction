@@ -62,6 +62,9 @@ const SUPPORT_OVERHANG = RING_DEPTH * 0.1
 const PLAYER_HALF_DEPTH = RING_DEPTH * 0.12
 /** Small descending snap that makes visually convincing landings deterministic. */
 const LANDING_SNAP_HEIGHT = 0.07
+/** Brief, shallow window for catching an adjacent wall after support is lost. */
+const LATE_FLIP_WINDOW = 0.09
+const LATE_FLIP_MIN_HEIGHT = -0.45
 /** Keep swept movement shorter than the narrowest collision feature. */
 const MAX_PHYSICS_STEP = SUPPORT_OVERHANG * 0.5
 
@@ -108,6 +111,7 @@ export type FwdWorld = {
   jumpHeld: boolean
   wasGrounded: boolean
   falling: boolean
+  fallingT: number
   supportRing: number
   supportFace: FaceIndex
   dailyDate: string
@@ -353,6 +357,7 @@ export function createWorld(
     jumpHeld: false,
     wasGrounded: true,
     falling: false,
+    fallingT: 0,
     supportRing: 1,
     supportFace: 0,
     dailyDate: utcDateKey(),
@@ -402,6 +407,7 @@ export function resetRun(
   world.jumpHeld = false
   world.wasGrounded = true
   world.falling = false
+  world.fallingT = 0
   world.supportRing = Math.floor(world.z / RING_DEPTH)
   world.supportFace = 0
   world.phase = 'racing'
@@ -609,7 +615,11 @@ function ensureStream(world: FwdWorld) {
 }
 
 function tryFlip(world: FwdWorld, input: FwdInput): boolean {
-  if (world.flipCooldown > 0 || world.falling) return false
+  const canLateLatch =
+    world.falling &&
+    world.fallingT <= LATE_FLIP_WINDOW &&
+    world.height >= LATE_FLIP_MIN_HEIGHT
+  if (world.flipCooldown > 0 || (world.falling && !canLateLatch)) return false
   // Allow grounded flips and mid-air latch flips (Run-like)
   if (world.height > 1.8) return false
 
@@ -623,8 +633,11 @@ function tryFlip(world: FwdWorld, input: FwdInput): boolean {
     world.lateral = -0.32
     world.vLateral = Math.min(world.vLateral, 0)
     world.flipCooldown = 0.22
+    world.falling = false
+    world.fallingT = 0
     world.height = 0
     world.vHeight = 0
+    world.wasGrounded = true
     world.supportRing = support.absRing
     world.supportFace = nextFace
     world.coyoteT = COYOTE_TIME
@@ -638,8 +651,11 @@ function tryFlip(world: FwdWorld, input: FwdInput): boolean {
     world.lateral = 0.32
     world.vLateral = Math.max(world.vLateral, 0)
     world.flipCooldown = 0.22
+    world.falling = false
+    world.fallingT = 0
     world.height = 0
     world.vHeight = 0
+    world.wasGrounded = true
     world.supportRing = support.absRing
     world.supportFace = nextFace
     world.coyoteT = COYOTE_TIME
@@ -707,6 +723,7 @@ function settleOnSupport(world: FwdWorld, support: SupportInfo) {
     world.supportFace = world.face
   }
   world.falling = false
+  world.fallingT = 0
   world.height = 0
   world.vHeight = 0
   world.coyoteT = COYOTE_TIME
@@ -810,6 +827,7 @@ function stepMotion(world: FwdWorld, dt: number, input: FwdInput) {
   const previousHeight = world.height
 
   if (world.falling) {
+    world.fallingT += dt
     world.jumpBufferT = Math.max(0, world.jumpBufferT - dt)
     world.coyoteT = Math.max(0, world.coyoteT - dt)
     if (world.jumpBufferT > 0 && world.coyoteT > 0) {
@@ -820,6 +838,21 @@ function stepMotion(world: FwdWorld, dt: number, input: FwdInput) {
       world.coyoteT = 0
       world.wasGrounded = false
     }
+
+    let wish = 0
+    if (input.left) wish += 1
+    if (input.right) wish -= 1
+    world.vLateral += wish * STRAFE_ACCEL * dt
+    world.vLateral *= Math.exp(-STRAFE_FRICTION * dt)
+    world.lateral = Math.max(
+      -0.5,
+      Math.min(0.5, world.lateral + world.vLateral * dt),
+    )
+    if (tryFlip(world, input)) {
+      world.z += world.speed * dt
+      return
+    }
+
     world.vHeight -= GRAVITY * dt
     world.height += world.vHeight * dt
     world.z += world.speed * dt
@@ -898,6 +931,7 @@ function stepMotion(world: FwdWorld, dt: number, input: FwdInput) {
       // instant into a jump; after that, later rings cannot snap the player up.
       leaveSupport(world)
       world.falling = true
+      world.fallingT = 0
       world.wasGrounded = false
       world.vHeight = Math.min(world.vHeight, -1.5)
   } else {

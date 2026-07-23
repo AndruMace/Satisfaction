@@ -258,4 +258,47 @@ describe('landing forgiveness', () => {
     expect(world.height).toBe(0)
     expect(world.supportRing).toBe(1)
   })
+
+  it('allows a shallow wall catch just after support is lost', () => {
+    const world = createWorld('explore')
+    startRun(world)
+    world.rings = [
+      solidRing(),
+      ring('gap', 'solid', 'solid', 'solid'),
+      solidRing(),
+    ]
+    world.lateral = 0.41
+    world.height = -0.2
+    world.vHeight = -2
+    world.falling = true
+    world.fallingT = 0.02
+    world.wasGrounded = false
+
+    stepWorld(world, 0.001, { left: true, right: false, jump: false })
+
+    expect(world.face).toBe(1)
+    expect(world.falling).toBe(false)
+    expect(world.height).toBe(0)
+  })
+
+  it('does not allow a wall catch after the save window expires', () => {
+    const world = createWorld('explore')
+    startRun(world)
+    world.rings = [
+      solidRing(),
+      ring('gap', 'solid', 'solid', 'solid'),
+      solidRing(),
+    ]
+    world.lateral = 0.41
+    world.height = -0.2
+    world.vHeight = -2
+    world.falling = true
+    world.fallingT = 0.1
+    world.wasGrounded = false
+
+    stepWorld(world, 0.001, { left: true, right: false, jump: false })
+
+    expect(world.face).toBe(0)
+    expect(world.falling).toBe(true)
+  })
 })
