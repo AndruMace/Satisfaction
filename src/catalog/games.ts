@@ -3,6 +3,7 @@ import { bubbleWarModule } from '../games/bubble-war/module'
 import { cascadeTycoonModule } from '../games/cascade-tycoon/module'
 import { dominoHeistModule } from '../games/domino-heist/module'
 import { fwdModule } from '../games/fwd/module'
+import { gateRushModule } from '../games/gate-rush/module'
 import { laserRouletteModule } from '../games/laser-roulette/module'
 import { perfectClearModule } from '../games/perfect-clear/module'
 import { squishFitModule } from '../games/squish-fit/module'
@@ -16,6 +17,7 @@ export const GAME_MODULES: SpectatorGameModule[] = [
   cascadeTycoonModule,
   perfectClearModule,
   squishFitModule,
+  gateRushModule,
   fwdModule,
 ]
 

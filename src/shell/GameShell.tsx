@@ -4,6 +4,7 @@ import { BubbleWarShell } from '../games/bubble-war'
 import { CascadeTycoonShell } from '../games/cascade-tycoon'
 import { DominoHeistShell } from '../games/domino-heist'
 import { FwdShell } from '../games/fwd'
+import { GateRushShell } from '../games/gate-rush'
 import { LaserRouletteShell } from '../games/laser-roulette'
 import { PerfectClearShell } from '../games/perfect-clear'
 import { SquishFitShell } from '../games/squish-fit'
@@ -128,6 +129,10 @@ export function GameShell({ module }: GameShellProps) {
 
   if (module.id === 'squish-fit') {
     return <SquishFitShell>{content}</SquishFitShell>
+  }
+
+  if (module.id === 'gate-rush') {
+    return <GateRushShell>{content}</GateRushShell>
   }
 
   if (module.id === 'fwd') {
