@@ -51,7 +51,30 @@ export type UpgradeState = {
   bumper: number
 }
 
+export type CascadePhase = 'ready' | 'running' | 'finished'
+
+export type AudioCue =
+  | { kind: 'start' }
+  | { kind: 'peg' }
+  | { kind: 'bumper' }
+  | { kind: 'upgrade' }
+  | { kind: 'jackpot'; mult: number }
+  | { kind: 'nearMiss' }
+  | { kind: 'win' }
+  | { kind: 'combo'; n: number }
+
+export type PayoutPopup = {
+  id: number
+  x: number
+  y: number
+  text: string
+  life: number
+  maxLife: number
+  jackpot: boolean
+}
+
 export type CascadeSnapshot = {
+  phase: CascadePhase
   treasury: number
   pegs: Peg[]
   balls: Ball[]
@@ -62,6 +85,19 @@ export type CascadeSnapshot = {
   restitution: number
   ballsDropped: number
   lastPayout: number
+  runTime: number
+  moneyGoal: number
+  runLimitSec: number
+  combo: number
+  bestCombo: number
+  shake: number
+  flash: number
+  banner: string | null
+  bannerLife: number
+  popups: PayoutPopup[]
+  timeLeft: number
+  lastCue: AudioCue | null
+  cueSeq: number
 }
 
 export const BALL_RADIUS = 7
@@ -71,8 +107,8 @@ export const GRAVITY = 980
 export const BASE_RESTITUTION = 0.72
 export const WALL_RESTITUTION = 0.55
 export const BUMPER_IMPULSE = 420
-export const STANDARD_PAY = 1
-export const BUMPER_PAY = 5
+export const STANDARD_PAY = 100
+export const BUMPER_PAY = 500
 
 /** Layout bands (view coordinates). */
 export const ZONE_TOP = 70

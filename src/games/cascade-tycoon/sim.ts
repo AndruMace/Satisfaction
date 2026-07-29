@@ -1,22 +1,39 @@
 import { VIEW_WIDTH } from '../../shared/types'
+import { formatMoney } from './format'
+import {
+  AUTO_BUY_ORDER,
+  COMBO_BIN_MIN,
+  COMBO_BREAK_MAX,
+  COMBO_TIMEOUT_SEC,
+  MONEY_GOAL,
+  NEAR_MISS_EARNED,
+  PEG_CUE_COOLDOWN,
+  runLimitForGoal,
+  START_BURST,
+} from './shorts'
 import {
   dropIntervalFor,
   DEFAULT_UPGRADES,
   restitutionFor,
+  UPGRADE_DEFS,
+  upgradeCost,
 } from './upgrades'
 import {
   BALL_RADIUS,
   BASE_RESTITUTION,
+  type AudioCue,
   type Ball,
   type Bin,
   BUMPER_IMPULSE,
   BUMPER_PAY,
   BUMPER_RADIUS,
+  type CascadePhase,
   type CascadeSnapshot,
   type Emitter,
   GRAVITY,
   type Peg,
   PEG_RADIUS,
+  type PayoutPopup,
   STANDARD_PAY,
   type UpgradeId,
   type UpgradeState,
@@ -28,8 +45,10 @@ import {
 let nextBallId = 1
 let nextPegId = 1
 let nextEmitterId = 1
+let nextPopupId = 1
 
 export type CascadeWorld = {
+  phase: CascadePhase
   treasury: number
   pegs: Peg[]
   balls: Ball[]
@@ -40,8 +59,21 @@ export type CascadeWorld = {
   restitution: number
   ballsDropped: number
   lastPayout: number
-  /** Manual click cooldown so spam doesn't flood. */
   manualCooldown: number
+  runTime: number
+  moneyGoal: number
+  runLimitSec: number
+  combo: number
+  bestCombo: number
+  comboTimer: number
+  shake: number
+  flash: number
+  banner: string | null
+  bannerLife: number
+  popups: PayoutPopup[]
+  pegCueCooldown: number
+  lastCue: AudioCue | null
+  cueSeq: number
 }
 
 const BIN_MULTS = [1, 2, 5, 10, 50, 10, 5, 2, 1]
@@ -57,11 +89,18 @@ const BIN_COLORS = [
   '#5c6bc0',
 ]
 
-export function createWorld(): CascadeWorld {
+function emitCue(world: CascadeWorld, cue: AudioCue) {
+  world.lastCue = cue
+  world.cueSeq += 1
+}
+
+export function createWorld(moneyGoal = MONEY_GOAL): CascadeWorld {
   const bins = createBins()
   const pegs = createPegGrid()
   const emitters = [createEmitter(VIEW_WIDTH * 0.5)]
+  const goal = Math.max(1, Math.floor(moneyGoal))
   return {
+    phase: 'ready',
     treasury: 0,
     pegs,
     balls: [],
@@ -73,6 +112,20 @@ export function createWorld(): CascadeWorld {
     ballsDropped: 0,
     lastPayout: 0,
     manualCooldown: 0,
+    runTime: 0,
+    moneyGoal: goal,
+    runLimitSec: runLimitForGoal(goal),
+    combo: 0,
+    bestCombo: 0,
+    comboTimer: 0,
+    shake: 0,
+    flash: 0,
+    banner: 'HIT $' + formatMoney(goal),
+    bannerLife: 0,
+    popups: [],
+    pegCueCooldown: 0,
+    lastCue: null,
+    cueSeq: 0,
   }
 }
 
@@ -128,26 +181,7 @@ function createEmitter(x: number): Emitter {
   }
 }
 
-export function snapshot(world: CascadeWorld): CascadeSnapshot {
-  return {
-    treasury: world.treasury,
-    pegs: world.pegs,
-    balls: world.balls,
-    bins: world.bins,
-    emitters: world.emitters,
-    upgrades: { ...world.upgrades },
-    dropInterval: world.dropInterval,
-    restitution: world.restitution,
-    ballsDropped: world.ballsDropped,
-    lastPayout: world.lastPayout,
-  }
-}
-
-export function spawnBall(
-  world: CascadeWorld,
-  x: number,
-  y = ZONE_TOP * 0.45,
-): Ball {
+export function spawnBall(world: CascadeWorld, x: number, y = ZONE_TOP + 8): Ball {
   const jitter = (Math.random() - 0.5) * 18
   const ball: Ball = {
     id: nextBallId++,
@@ -167,19 +201,83 @@ export function spawnBall(
   return ball
 }
 
-/** Phase 1 helper — click-to-drop from spawner ceiling. */
+/** Click-to-drop from spawner ceiling — only while running. */
 export function tryManualDrop(world: CascadeWorld, x: number): boolean {
+  if (world.phase !== 'running') return false
   if (world.manualCooldown > 0) return false
   spawnBall(world, x)
   world.manualCooldown = 0.12
   return true
 }
 
+export function startRun(world: CascadeWorld, moneyGoal?: number): void {
+  const goal = moneyGoal ?? world.moneyGoal
+  const fresh = createWorld(goal)
+  Object.assign(world, fresh)
+  world.phase = 'running'
+  world.banner = 'HIT $' + formatMoney(goal)
+  world.bannerLife = 2.2
+  world.flash = 0.35
+  emitCue(world, { kind: 'start' })
+
+  const xs = evenlySpace(1)
+  for (let i = 0; i < START_BURST; i++) {
+    spawnBall(world, xs[0] + (Math.random() - 0.5) * 30)
+  }
+}
+
+export function resetToReady(world: CascadeWorld, moneyGoal?: number): void {
+  const fresh = createWorld(moneyGoal ?? world.moneyGoal)
+  Object.assign(world, fresh)
+}
+
+export function resetWorld(world: CascadeWorld, moneyGoal?: number): void {
+  resetToReady(world, moneyGoal)
+}
+
+function decayVfx(world: CascadeWorld, dt: number) {
+  if (world.shake > 0) world.shake = Math.max(0, world.shake - dt * 2.4)
+  if (world.flash > 0) world.flash = Math.max(0, world.flash - dt * 1.6)
+  if (world.bannerLife > 0) {
+    world.bannerLife = Math.max(0, world.bannerLife - dt)
+    if (world.bannerLife <= 0 && world.phase !== 'finished') {
+      world.banner = null
+    }
+  }
+  for (const popup of world.popups) {
+    popup.life -= dt
+  }
+  world.popups = world.popups.filter((p) => p.life > 0)
+
+  for (const peg of world.pegs) {
+    if (peg.flash > 0) peg.flash = Math.max(0, peg.flash - dt * 3.2)
+  }
+}
+
 export function stepWorld(world: CascadeWorld, dt: number): void {
   const clamped = Math.min(0.033, Math.max(0, dt))
+
+  if (world.phase === 'ready') {
+    decayVfx(world, clamped)
+    return
+  }
+
+  if (world.phase === 'finished') {
+    decayVfx(world, clamped)
+    // Keep banner visible on finish
+    if (world.bannerLife < 0.5) world.bannerLife = 0.5
+    return
+  }
+
   if (world.manualCooldown > 0) {
     world.manualCooldown = Math.max(0, world.manualCooldown - clamped)
   }
+  if (world.pegCueCooldown > 0) {
+    world.pegCueCooldown = Math.max(0, world.pegCueCooldown - clamped)
+  }
+
+  // running
+  world.runTime += clamped
 
   for (const emitter of world.emitters) {
     emitter.cooldown -= clamped
@@ -189,19 +287,68 @@ export function stepWorld(world: CascadeWorld, dt: number): void {
     }
   }
 
+  stepPhysics(world, clamped)
+  stepAutoBuy(world)
+  stepComboTimeout(world, clamped)
+  decayVfx(world, clamped)
+
+  if (
+    world.treasury >= world.moneyGoal ||
+    world.runTime >= world.runLimitSec
+  ) {
+    finishRun(world)
+  }
+}
+
+function stepPhysics(world: CascadeWorld, dt: number) {
   for (const peg of world.pegs) {
-    if (peg.flash > 0) peg.flash = Math.max(0, peg.flash - clamped * 3.2)
+    if (peg.flash > 0) peg.flash = Math.max(0, peg.flash - dt * 3.2)
   }
 
   for (const ball of world.balls) {
     if (!ball.alive) continue
-    integrateBall(world, ball, clamped)
+    integrateBall(world, ball, dt)
   }
 
   world.balls = world.balls.filter((b) => b.alive)
   if (world.balls.length > 120) {
     world.balls.splice(0, world.balls.length - 120)
   }
+}
+
+function stepComboTimeout(world: CascadeWorld, dt: number) {
+  if (world.combo <= 0) return
+  world.comboTimer -= dt
+  if (world.comboTimer <= 0) {
+    world.combo = 0
+  }
+}
+
+function stepAutoBuy(world: CascadeWorld) {
+  for (const id of AUTO_BUY_ORDER) {
+    const def = UPGRADE_DEFS.find((d) => d.id === id)!
+    const level = world.upgrades[id]
+    if (level >= def.maxLevel) continue
+    const cost = upgradeCost(def, level)
+    if (world.treasury < cost) continue
+    if (buyUpgrade(world, id, cost)) {
+      emitCue(world, { kind: 'upgrade' })
+      world.banner = def.label.toUpperCase()
+      world.bannerLife = 1.1
+      // One buy per tick keeps escalation readable
+      return
+    }
+  }
+}
+
+function finishRun(world: CascadeWorld) {
+  if (world.phase === 'finished') return
+  world.phase = 'finished'
+  world.banner = `RUN COMPLETE · $${formatMoney(world.treasury)}`
+  world.bannerLife = 8
+  world.flash = 0.5
+  world.shake = 0.4
+  emitCue(world, { kind: 'win' })
 }
 
 function integrateBall(world: CascadeWorld, ball: Ball, dt: number): void {
@@ -262,9 +409,17 @@ function resolvePegHit(world: CascadeWorld, ball: Ball, peg: Peg): void {
     }
     ball.earned += BUMPER_PAY
     peg.flash = 1
+    if (world.pegCueCooldown <= 0) {
+      emitCue(world, { kind: 'bumper' })
+      world.pegCueCooldown = PEG_CUE_COOLDOWN * 0.6
+    }
   } else {
     ball.earned += STANDARD_PAY
     peg.flash = 0.7
+    if (world.pegCueCooldown <= 0) {
+      emitCue(world, { kind: 'peg' })
+      world.pegCueCooldown = PEG_CUE_COOLDOWN
+    }
   }
 
   ball.vx += (Math.random() - 0.5) * 28
@@ -279,6 +434,52 @@ function collectBall(world: CascadeWorld, ball: Ball): void {
   world.lastPayout = payout
   ball.alive = false
   ball.y = ZONE_BINS + 40
+
+  const cx = (bin.x0 + bin.x1) / 2
+  const isJackpot = bin.multiplier >= 50
+  const isHigh = bin.multiplier >= COMBO_BIN_MIN
+
+  if (payout > 0) {
+    world.popups.push({
+      id: nextPopupId++,
+      x: cx,
+      y: ZONE_BINS - 12,
+      text: `+$${formatMoney(payout)}`,
+      life: isJackpot ? 1.4 : 0.85,
+      maxLife: isJackpot ? 1.4 : 0.85,
+      jackpot: isJackpot,
+    })
+  }
+
+  // Near-miss: 10× bins flanking the 50× with a rich ball
+  if (
+    bin.multiplier === 10 &&
+    ball.earned >= NEAR_MISS_EARNED &&
+    (bin.id === 3 || bin.id === 5)
+  ) {
+    emitCue(world, { kind: 'nearMiss' })
+    world.shake = Math.max(world.shake, 0.25)
+  }
+
+  if (isJackpot) {
+    world.shake = Math.max(world.shake, 0.7)
+    world.flash = Math.max(world.flash, 0.55)
+    emitCue(world, { kind: 'jackpot', mult: bin.multiplier })
+    world.banner = 'JACKPOT 50×'
+    world.bannerLife = 1.4
+  }
+
+  if (bin.multiplier <= COMBO_BREAK_MAX) {
+    world.combo = 0
+    world.comboTimer = 0
+  } else if (isHigh) {
+    world.combo += 1
+    world.comboTimer = COMBO_TIMEOUT_SEC
+    if (world.combo > world.bestCombo) world.bestCombo = world.combo
+    if (world.combo >= 2) {
+      emitCue(world, { kind: 'combo', n: world.combo })
+    }
+  }
 }
 
 export function buyUpgrade(
@@ -286,6 +487,7 @@ export function buyUpgrade(
   id: UpgradeId,
   cost: number,
 ): boolean {
+  if (world.phase !== 'running') return false
   if (world.treasury < cost) return false
   world.treasury -= cost
   world.upgrades[id] += 1
@@ -325,7 +527,32 @@ function convertRandomPeg(world: CascadeWorld): void {
   peg.flash = 1
 }
 
-export function resetWorld(world: CascadeWorld): void {
-  const fresh = createWorld()
-  Object.assign(world, fresh)
+export function snapshot(world: CascadeWorld): CascadeSnapshot {
+  const timeLeft = Math.max(0, world.runLimitSec - world.runTime)
+  return {
+    phase: world.phase,
+    treasury: world.treasury,
+    pegs: world.pegs.map((p) => ({ ...p })),
+    balls: world.balls.map((b) => ({ ...b })),
+    bins: world.bins,
+    emitters: world.emitters.map((e) => ({ ...e })),
+    upgrades: { ...world.upgrades },
+    dropInterval: world.dropInterval,
+    restitution: world.restitution,
+    ballsDropped: world.ballsDropped,
+    lastPayout: world.lastPayout,
+    runTime: world.runTime,
+    moneyGoal: world.moneyGoal,
+    runLimitSec: world.runLimitSec,
+    combo: world.combo,
+    bestCombo: world.bestCombo,
+    shake: world.shake,
+    flash: world.flash,
+    banner: world.banner,
+    bannerLife: world.bannerLife,
+    popups: world.popups.map((p) => ({ ...p })),
+    timeLeft,
+    lastCue: world.lastCue,
+    cueSeq: world.cueSeq,
+  }
 }

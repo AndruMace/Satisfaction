@@ -5,8 +5,8 @@ import { CascadeGameView } from './CascadeGameView'
 export const cascadeTycoonModule: SpectatorGameModule = {
   id: 'cascade-tycoon',
   title: 'Cascade Tycoon',
-  blurb: 'Drop, bounce, cash out — grow the peg empire.',
-  idleHint: 'Balls drop automatically',
+  blurb: 'Hit the goal before time runs out — bounce, cash out, grow.',
+  idleHint: 'Tap Launch to start the run',
   available: true,
   visibility: 'studio',
   GameView: CascadeGameView,
